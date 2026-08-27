@@ -1,0 +1,9 @@
+{
+  "name": "Boletim da Jornada",
+  "short_name": "Boletim",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0B1410",
+  "theme_color": "#0B1410",
+  "icons": []
+}

@@ -1,0 +1,33 @@
+[build]
+  base    = "web"
+  command = "npm run build"
+  publish = "web/dist"
+
+# Um site do Netlify, tres contextos. O branch deploy da main e producao;
+# dev e test ganham URLs proprios (dev--nome-do-site.netlify.app).
+[context.production.environment]
+  VITE_AMBIENTE = "prod"
+
+[context.branch-deploy.environment]
+  VITE_AMBIENTE = "test"
+
+[context.deploy-preview.environment]
+  VITE_AMBIENTE = "test"
+
+# PWA em rota unica: tudo cai no index.html.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

@@ -1,0 +1,23 @@
+{
+  "name": "boletim-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/servidor.js",
+    "recolher": "node src/recolher.js",
+    "inspect": "node src/inspect.js",
+    "descobrir": "node src/descobrir.js"
+  },
+  "dependencies": {
+    "cheerio": "^1.0.0",
+    "dotenv": "^16.4.5",
+    "firebase-admin": "^12.5.0",
+    "grammy": "^1.30.0",
+    "node-cron": "^3.0.3",
+    "undici": "^6.19.8"
+  }
+}

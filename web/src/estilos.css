@@ -1,0 +1,544 @@
+:root {
+  --fundo: #0b1410;
+  --superficie: #13211b;
+  --superficie-alta: #18291f;
+  --linha: #1f3329;
+  --texto: #e8efe9;
+  --apagado: #7e9188;
+
+  --fora: #e4483c;
+  --duvida: #e8a33d;
+  --entra: #7bd44f;
+
+  --raio: 4px;
+  --gutter: 14px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--fundo);
+  color: var(--texto);
+  font-family: Archivo, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.app {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 0 var(--gutter) 48px;
+}
+
+/* ---------- cabecalho ---------- */
+
+.cabecalho {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: linear-gradient(var(--fundo) 78%, transparent);
+  padding: 20px 0 14px;
+}
+
+.jornada {
+  font-size: clamp(38px, 13vw, 56px);
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  line-height: 0.86;
+  margin: 0;
+}
+
+.jornada span {
+  color: var(--apagado);
+  font-size: 0.42em;
+  font-weight: 700;
+  letter-spacing: 0;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.fecho {
+  font-family: 'Roboto Mono', monospace;
+  font-size: 12px;
+  color: var(--apagado);
+  margin-top: 10px;
+  display: flex;
+  justify-content: space-between;
+  border-top: 1px solid var(--linha);
+  padding-top: 8px;
+}
+
+.fecho strong {
+  color: var(--texto);
+  font-weight: 700;
+}
+
+.fecho.urgente strong {
+  color: var(--duvida);
+}
+
+/* ---------- seccoes ---------- */
+
+.seccao {
+  margin-top: 30px;
+}
+
+.seccao > h2 {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--apagado);
+  margin: 0 0 10px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.seccao > h2::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--linha);
+}
+
+.contagem {
+  font-family: 'Roboto Mono', monospace;
+  color: var(--texto);
+}
+
+/* ---------- cartao de jogador ---------- */
+
+.cartao {
+  display: grid;
+  grid-template-columns: 3px 1fr auto;
+  gap: 0 12px;
+  background: var(--superficie);
+  border-radius: var(--raio);
+  padding: 0;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+
+.espinha {
+  background: var(--apagado);
+}
+
+.espinha--fora {
+  background: var(--fora);
+}
+
+.espinha--duvida {
+  background: var(--duvida);
+}
+
+.espinha--entra {
+  background: var(--entra);
+}
+
+.cartao-corpo {
+  padding: 12px 0;
+  min-width: 0;
+}
+
+.cartao-nome {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cartao-meta {
+  font-size: 12px;
+  color: var(--apagado);
+  margin-top: 2px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.cartao-meta .posicao {
+  font-family: 'Roboto Mono', monospace;
+  font-weight: 700;
+  color: var(--texto);
+}
+
+.motivo {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--apagado);
+  margin: 8px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--linha);
+}
+
+.motivo strong {
+  color: var(--texto);
+  font-weight: 700;
+}
+
+.cartao-numeros {
+  padding: 12px 12px 12px 0;
+  text-align: right;
+  font-family: 'Roboto Mono', monospace;
+  white-space: nowrap;
+}
+
+.custo {
+  font-size: 16px;
+  font-weight: 700;
+  display: block;
+}
+
+.media {
+  font-size: 11px;
+  color: var(--apagado);
+  display: block;
+  margin-top: 2px;
+}
+
+/* ---------- sugestao ---------- */
+
+.troca {
+  background: var(--superficie-alta);
+  border-radius: var(--raio);
+  padding: 12px;
+  margin-bottom: 8px;
+}
+
+.troca-linha {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.troca-linha + .troca-linha {
+  margin-top: 8px;
+}
+
+.seta {
+  font-family: 'Roboto Mono', monospace;
+  color: var(--apagado);
+  flex: none;
+}
+
+.troca-nome {
+  flex: 1;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.troca-nome.sai {
+  color: var(--apagado);
+  text-decoration: line-through;
+  text-decoration-color: var(--fora);
+  font-weight: 500;
+}
+
+.troca-valor {
+  font-family: 'Roboto Mono', monospace;
+  font-size: 13px;
+  flex: none;
+}
+
+.delta {
+  font-family: 'Roboto Mono', monospace;
+  font-size: 12px;
+  color: var(--apagado);
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--linha);
+  display: flex;
+  justify-content: space-between;
+}
+
+.positivo {
+  color: var(--entra);
+}
+
+.negativo {
+  color: var(--fora);
+}
+
+/* ---------- controlos ---------- */
+
+.abas {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.aba {
+  flex: 1;
+  background: none;
+  border: 1px solid var(--linha);
+  color: var(--apagado);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 9px 4px;
+  border-radius: var(--raio);
+  cursor: pointer;
+}
+
+.aba[aria-pressed='true'] {
+  background: var(--superficie-alta);
+  border-color: var(--apagado);
+  color: var(--texto);
+}
+
+.aba:focus-visible,
+.detalhe summary:focus-visible {
+  outline: 2px solid var(--entra);
+  outline-offset: 2px;
+}
+
+/* ---------- avisos e estados ---------- */
+
+.aviso {
+  border-left: 3px solid var(--duvida);
+  background: var(--superficie);
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  border-radius: 0 var(--raio) var(--raio) 0;
+  margin-bottom: 8px;
+}
+
+.vazio {
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--apagado);
+  font-size: 14px;
+  line-height: 1.6;
+  border: 1px dashed var(--linha);
+  border-radius: var(--raio);
+}
+
+.vazio strong {
+  color: var(--texto);
+  display: block;
+  font-size: 16px;
+  margin-bottom: 4px;
+}
+
+.detalhe {
+  margin-top: 24px;
+  border-top: 1px solid var(--linha);
+  padding-top: 12px;
+}
+
+.detalhe summary {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--apagado);
+  cursor: pointer;
+}
+
+.detalhe pre {
+  font-family: 'Roboto Mono', monospace;
+  font-size: 11px;
+  color: var(--apagado);
+  line-height: 1.7;
+  margin: 10px 0 0;
+  white-space: pre-wrap;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .cartao {
+    animation: entrar 0.24s ease both;
+  }
+}
+
+@keyframes entrar {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+/* ---------- ecra de entrada ---------- */
+
+.entrada {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 18px;
+  padding-bottom: 80px;
+}
+
+.entrada-texto {
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--apagado);
+  margin: 0;
+  max-width: 34ch;
+}
+
+.botao-google {
+  background: var(--texto);
+  color: var(--fundo);
+  border: 0;
+  border-radius: var(--raio);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  padding: 15px 20px;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.botao-google:focus-visible {
+  outline: 2px solid var(--entra);
+  outline-offset: 3px;
+}
+
+.entrada-nota {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--apagado);
+  border-top: 1px solid var(--linha);
+  padding-top: 12px;
+  margin: 6px 0 0;
+  max-width: 40ch;
+}
+
+/* ---------- topo com sair ---------- */
+
+.topo {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sair {
+  background: none;
+  border: 1px solid var(--linha);
+  border-radius: var(--raio);
+  color: var(--apagado);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 6px 10px;
+  cursor: pointer;
+  flex: none;
+  margin-top: 6px;
+}
+
+.sair:focus-visible {
+  outline: 2px solid var(--entra);
+  outline-offset: 2px;
+}
+
+.delta.sem-linha {
+  border-top: 0;
+}
+
+.bloco-opcoes {
+  margin-top: 16px;
+}
+
+/* ---------- construtor de plantel ---------- */
+
+.procura {
+  width: 100%;
+  background: var(--superficie);
+  border: 1px solid var(--linha);
+  border-radius: var(--raio);
+  color: var(--texto);
+  font-family: inherit;
+  font-size: 14px;
+  padding: 11px 12px;
+  margin-bottom: 10px;
+}
+
+.procura::placeholder {
+  color: var(--apagado);
+}
+
+.procura:focus-visible {
+  outline: 2px solid var(--entra);
+  outline-offset: 2px;
+}
+
+.lista-escolha {
+  max-height: 42vh;
+  overflow-y: auto;
+  border: 1px solid var(--linha);
+  border-radius: var(--raio);
+  -webkit-overflow-scrolling: touch;
+}
+
+.escolha {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0 10px;
+  width: 100%;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--linha);
+  color: var(--texto);
+  font-family: inherit;
+  text-align: left;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.escolha:last-child {
+  border-bottom: 0;
+}
+
+.escolha--fixo {
+  background: var(--superficie-alta);
+  box-shadow: inset 3px 0 0 var(--duvida);
+}
+
+.escolha-nome {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.escolha-clube {
+  grid-column: 1;
+  font-size: 11px;
+  color: var(--apagado);
+}
+
+.escolha-numeros {
+  grid-row: 1 / 3;
+  grid-column: 2;
+  align-self: center;
+  font-family: 'Roboto Mono', monospace;
+  font-size: 12px;
+  color: var(--apagado);
+  white-space: nowrap;
+}
+
+.escolha--fixo .escolha-numeros {
+  color: var(--texto);
+}
+
+.escolha:focus-visible {
+  outline: 2px solid var(--entra);
+  outline-offset: -2px;
+}

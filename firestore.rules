@@ -1,0 +1,38 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Cada pessoa le so o seu boletim. A escrita e exclusiva do worker,
+    // que usa a conta de servico e ignora estas regras.
+    // O documento e o uid, ou uid_dev / uid_test nos outros ambientes.
+    // A regra aceita os tres e continua a fechar tudo a outra pessoa.
+    function meu(documento) {
+      return request.auth != null &&
+             (documento == request.auth.uid ||
+              documento == request.auth.uid + '_dev' ||
+              documento == request.auth.uid + '_test');
+    }
+
+    match /boletins/{documento} {
+      allow read:  if meu(documento);
+      allow write: if false;
+    }
+
+    match /utilizadores/{documento} {
+      allow read:  if meu(documento);
+      allow write: if false;
+    }
+
+    // Tokens da Liga Record. O browser NUNCA lhe toca — nem para ler.
+    // So a conta de servico do worker, que ignora estas regras.
+    match /segredos/{uid} {
+      allow read, write: if false;
+    }
+
+    // Nada mais e acessivel.
+    match /{documento=**} {
+      allow read, write: if false;
+    }
+  }
+}
