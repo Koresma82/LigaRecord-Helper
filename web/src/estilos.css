@@ -785,3 +785,34 @@ html, body {
   text-decoration: none;
   border-bottom: 1px solid currentColor;
 }
+
+/* ---------- abas no telemovel ---------- */
+/*
+   Cinco abas nao cabem num ecra de 390px, por isso a barra rola na
+   horizontal. So que assim, com o contentor a ter margens, a aba do fim
+   ficava cortada a meio contra a margem e parecia um erro de layout em vez
+   de um sinal de que ha mais para o lado.
+   A solucao e deixa-la sangrar ate as bordas do ecra: ai o corte acontece
+   no limite do vidro e le-se como "ha mais aqui".
+*/
+@media (max-width: 560px) {
+  .abas {
+    margin-left: calc(var(--margem, 16px) * -1);
+    margin-right: calc(var(--margem, 16px) * -1);
+    padding-left: var(--margem, 16px);
+    padding-right: var(--margem, 16px);
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+  }
+  .aba {
+    scroll-snap-align: start;
+    font-size: 12px;
+    padding: 9px 13px;
+    gap: 5px;
+  }
+  .aba .bolha {
+    font-size: 10px;
+    padding: 1px 6px;
+    min-width: 18px;
+  }
+}

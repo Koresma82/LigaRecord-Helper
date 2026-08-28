@@ -44,7 +44,11 @@ neste formato exacto:
 
 {"duvidas":[{"nome":"...","equipa":"...","motivo":"...","confianca":"alta|media|baixa","fonte":"https://..."}]}
 
-O "motivo" e uma frase curta em portugues de Portugal.`;
+O "motivo" e uma frase curta em portugues de Portugal.
+
+Depois de pesquisares, a tua ULTIMA mensagem tem de ser so o objecto JSON.
+Nao escrevas um resumo do que encontraste, nao expliques o que pesquisaste,
+nao uses blocos de codigo. Só o JSON.`;
 
 function extrairJSON(texto) {
   const limpo = texto.replace(/```json|```/g, '').trim();
@@ -80,37 +84,60 @@ export async function duvidasDaJornada(plantel, jornada, { log = () => {} } = {}
     log('  Duvidas IA: desligado (sem ANTHROPIC_API_KEY)');
     return null;
   }
-  if (!plantel?.length) return null;
+  // Sair calado aqui deixava a impressao de que a consulta nem existia.
+  // Sem plantel nao ha nada para perguntar, mas convem dize-lo.
+  if (!plantel?.length) {
+    log('  Duvidas IA: sem plantel registado, nao ha o que perguntar');
+    return null;
+  }
 
   const lista = plantel.map((j) => `- ${j.nome} (${j.equipa})`).join('\n');
 
-  const resposta = await fetch(URL_API, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': chave,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: MODELO,
-      max_tokens: 2000,
-      system: INSTRUCOES,
-      tools: [{ type: 'web_search_20250305', name: 'web_search' }],
-      messages: [
-        {
-          role: 'user',
-          content: `Proxima jornada: ${jornada}.\n\nPlantel:\n${lista}`,
-        },
-      ],
-    }),
-  });
+  // Com a pesquisa web activa a resposta vem em VOLTAS: o modelo pesquisa,
+  // le, pesquisa outra vez, e so no fim escreve. Cada volta termina com
+  // stop_reason "pause_turn" e temos de devolver o que veio para ele
+  // continuar. Assumir uma volta so era o que dava "a resposta nao continha
+  // JSON" — o texto final ainda nao tinha sido escrito.
+  const mensagens = [
+    { role: 'user', content: `Proxima jornada: ${jornada}.\n\nPlantel:\n${lista}` },
+  ];
 
-  if (!resposta.ok) {
-    const corpo = await resposta.text();
-    throw new Error(`API da Anthropic devolveu ${resposta.status}: ${corpo.slice(0, 200)}`);
+  let dados = null;
+  let voltas = 0;
+  const MAX_VOLTAS = 5;
+
+  while (voltas < MAX_VOLTAS) {
+    voltas += 1;
+
+    const resposta = await fetch(URL_API, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': chave,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: MODELO,
+        max_tokens: 4000,
+        system: INSTRUCOES,
+        tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+        messages: mensagens,
+      }),
+    });
+
+    if (!resposta.ok) {
+      const corpo = await resposta.text();
+      throw new Error(`API da Anthropic devolveu ${resposta.status}: ${corpo.slice(0, 200)}`);
+    }
+
+    dados = await resposta.json();
+
+    if (dados.stop_reason !== 'pause_turn') break;
+
+    // Devolvemos o turno tal e qual para ele retomar de onde ficou.
+    mensagens.push({ role: 'assistant', content: dados.content });
+    log(`  Duvidas IA: a continuar a pesquisa (volta ${voltas})`);
   }
-
-  const dados = await resposta.json();
 
   // A resposta traz blocos de varios tipos (texto, uso da pesquisa,
   // resultados). O JSON esta nos blocos de texto — juntamo-los todos em vez
@@ -120,7 +147,19 @@ export async function duvidasDaJornada(plantel, jornada, { log = () => {} } = {}
     .map((b) => b.text)
     .join('\n');
 
-  const duvidas = validar(extrairJSON(texto), plantel);
+  let bruto;
+  try {
+    bruto = extrairJSON(texto);
+  } catch (erro) {
+    // Sem ver o que veio nao ha como afinar o prompt. 300 caracteres chegam
+    // para perceber se ele respondeu em prosa, se ficou a meio, ou se nao
+    // encontrou nada.
+    throw new Error(
+      `${erro.message} Recebido (${dados.stop_reason}): ${texto.slice(0, 300) || '(vazio)'}`
+    );
+  }
+
+  const duvidas = validar(bruto, plantel);
 
   const custo = dados.usage
     ? ` (${dados.usage.input_tokens} in / ${dados.usage.output_tokens} out)`
