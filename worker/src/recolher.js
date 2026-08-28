@@ -57,6 +57,10 @@ async function duvidasSeNecessario(plantel, jornada, anterior, { log = () => {},
 // maisfutebol — que responde de qualquer lado mas traz menos detalhe.
 // Tenta a fonte principal e, se cair, a alternativa. Devolve [] se ambas
 // falharem — uma seccao em falta nao pode deitar abaixo a recolha toda.
+// Uma lista vazia conta como falha. Os leitores do zerozero apanham o 403
+// por dentro e devolvem [] em vez de rebentar, portanto so trocar de fonte
+// quando ha excepcao deixava a alternativa por usar: em producao o log saia
+// cheio de 403 e sem uma unica linha do maisfutebol.
 async function comAlternativa(nome, principal, alternativa, { log = () => {} } = {}) {
   // Em local o zerozero responde, portanto a alternativa nunca era exercitada
   // — testava-se um caminho e punha-se outro em producao. FORCAR_ALTERNATIVA=1
@@ -68,15 +72,21 @@ async function comAlternativa(nome, principal, alternativa, { log = () => {} } =
   }
 
   try {
-    return await principal();
+    const r = await principal();
+    if (Array.isArray(r) && r.length === 0) {
+      log(`  ${nome} (zerozero): nada devolvido — a tentar o maisfutebol`);
+    } else {
+      return r;
+    }
   } catch (erro) {
     log(`  ${nome} (zerozero): ${erro.message.split('\n')[0]}`);
-    try {
-      return await alternativa();
-    } catch (erro2) {
-      log(`  ${nome} (maisfutebol): ${erro2.message.split('\n')[0]}`);
-      return [];
-    }
+  }
+
+  try {
+    return await alternativa();
+  } catch (erro) {
+    log(`  ${nome} (maisfutebol): ${erro.message.split('\n')[0]}`);
+    return [];
   }
 }
 
@@ -222,10 +232,14 @@ export async function recolherLeve({ log = console.log, duvidasIA: forcarDuvidas
     castigosPorConfirmar: porConfirmar,
     // Campo proprio, deliberadamente fora de emRisco: isto e interpretacao
     // de noticias, nao um facto lido de uma tabela.
-    duvidasIA: await duvidasSeNecessario(minhaEquipa.jogadores, jornada.numero, anterior, {
-      log,
-      forcar: forcarDuvidas,
-    }),
+    // A recolha leve nao volta a ler a jornada — reaproveita a do boletim
+    // anterior, que e o que ela faz com tudo o resto.
+    duvidasIA: await duvidasSeNecessario(
+      minhaEquipa.jogadores,
+      anterior.jornada?.numero ?? null,
+      anterior,
+      { log, forcar: forcarDuvidas }
+    ),
   };
 
   await guardarBoletim(boletim);
