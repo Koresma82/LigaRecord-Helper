@@ -11,7 +11,9 @@
     "recolher": "node src/recolher.js",
     "verificar": "node testes/verificar.mjs",
     "inspect-jornada": "node src/inspect-jornada.js",
-    "inspect-zerozero": "node src/inspect-zerozero.js"
+    "inspect-zerozero": "node src/inspect-zerozero.js",
+    "inspect-maisfutebol": "node src/inspect-maisfutebol.js",
+    "sexta": "node src/enviar-sexta.js"
   },
   "dependencies": {
     "cheerio": "^1.0.0",

@@ -57,7 +57,8 @@ export function CartaoJogador({ jogador, estado }) {
 // a encher espaco. O adversario da proxima jornada e o mais util para
 // decidir o onze, por isso fica em linha propria.
 function Estatisticas({ jogador }) {
-  const { golos, amarelos, vermelhos, pontosUltimaRonda, proximoJogo, posicao } = jogador;
+  const { golos, penaltis, amarelos, vermelhos, pontosUltimaRonda, proximoJogo, posicao } =
+    jogador;
 
   // Os golos vêm da lista de marcadores da liga, que é de golos MARCADOS.
   // Não há golos sofridos em lado nenhum, por isso um guarda-redes com
@@ -75,8 +76,18 @@ function Estatisticas({ jogador }) {
       {temAlgum && (
         <div className="estatisticas-linha">
           {mostraGolos && (
-            <span className="estatistica" title="golos marcados">
+            <span
+              className="estatistica"
+              title={
+                penaltis > 0
+                  ? `${golos} golos, ${penaltis} de grande penalidade`
+                  : 'golos marcados'
+              }
+            >
               ⚽ {golos}
+              {/* Quem bate os penaltis da equipa tem pontos quase garantidos
+                  sempre que ela ganha um — vale a pena distinguir. */}
+              {penaltis > 0 && <span className="marca-penaltis"> ({penaltis}pen)</span>}
             </span>
           )}
           {amarelos > 0 && (

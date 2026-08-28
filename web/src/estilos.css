@@ -686,3 +686,102 @@ html, body {
   padding-top: 1rem;
   margin-top: 1.5rem;
 }
+
+/* Golos de grande penalidade, ao lado do total. Discreto: e um detalhe do
+   numero de golos, nao uma estatistica separada. */
+.marca-penaltis {
+  color: var(--verde, #4ADE80);
+  font-size: 0.85em;
+  opacity: 0.85;
+}
+
+/* Duvidas por IA. O visual e deliberadamente mais sobrio do que o das
+   lesoes confirmadas: nada de vermelhos nem de bolhas de alerta. E
+   informacao para confirmar, nao para agir. */
+.duvidas-ia {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+.duvidas-ia__cabecalho {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.duvidas-ia__cabecalho h2 {
+  font-size: 1rem;
+  margin: 0;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+.etiqueta-ia {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  opacity: 0.75;
+}
+.duvidas-ia__nota,
+.duvidas-ia__vazio,
+.duvidas-ia__data {
+  font-size: 0.85rem;
+  opacity: 0.6;
+  margin: 0.6rem 0 0;
+}
+.duvidas-ia__data {
+  font-family: 'Roboto Mono', monospace;
+  font-size: 0.72rem;
+  opacity: 0.4;
+}
+.duvidas-ia__lista {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0 0;
+  display: grid;
+  gap: 0.75rem;
+}
+.duvida {
+  background: rgba(255, 255, 255, 0.04);
+  border-left: 3px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  padding: 0.75rem 0.9rem;
+}
+.duvida--alta {
+  border-left-color: #F59E0B;
+}
+.duvida__topo {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.duvida__equipa {
+  font-size: 0.8rem;
+  opacity: 0.6;
+}
+.duvida__confianca {
+  margin-left: auto;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.65;
+}
+.duvida__confianca--alta {
+  color: #F59E0B;
+  opacity: 1;
+}
+.duvida__motivo {
+  margin: 0.4rem 0 0.5rem;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+.duvida__fonte {
+  font-size: 0.78rem;
+  color: var(--verde, #4ADE80);
+  text-decoration: none;
+  border-bottom: 1px solid currentColor;
+}

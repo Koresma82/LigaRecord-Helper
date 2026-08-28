@@ -3,6 +3,7 @@ import { CartaoJogador, Troca, Vazio, Resumo, Grelha } from './componentes/Carto
 import Entrada from './componentes/Entrada.jsx';
 import Construtor from './componentes/Construtor.jsx';
 import Disciplina from './componentes/Disciplina.jsx';
+import DuvidasIA from './componentes/DuvidasIA.jsx';
 import Campeonato from './componentes/Campeonato.jsx';
 import { euros, contagem } from './lib/formatar.js';
 import { auth, onAuthStateChanged, escutarBoletim, sair } from './lib/firebase.js';
@@ -143,6 +144,7 @@ export default function App() {
             vazio="Nenhum castigo confirmado nesta jornada."
           />
           <Disciplina cartoes={boletim.cartoes} plantel={plantel} />
+          <DuvidasIA duvidasIA={boletim.duvidasIA} />
         </>
       )}
 

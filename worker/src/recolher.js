@@ -3,6 +3,13 @@ import { pathToFileURL } from 'node:url';
 import * as lr from './fontes/ligarecord.js';
 import { lesoesDaLiga } from './fontes/transfermarkt.js';
 import { castigosPorAcumulacao } from './fontes/disciplina.js';
+import { duvidasDaJornada } from './fontes/duvidas-ia.js';
+import {
+  disciplinaDaLiga as disciplinaMaisFutebol,
+  marcadoresDaLiga as marcadoresMaisFutebol,
+  classificacaoDaLiga as classificacaoMaisFutebol,
+  jogosDeVariasJornadas as jogosMaisFutebol,
+} from './fontes/maisfutebol.js';
 import {
   marcadoresDaLiga,
   disciplinaDaLiga,
@@ -22,6 +29,70 @@ import { montarPlantel } from './partilhado/montar-plantel.js';
 // que o scraping partiu, nao que a liga esta saudavel.
 const MINIMO_PLAUSIVEL = 8;
 
+// A consulta a IA custa dinheiro e as noticias de uma jornada nao mudam de
+// hora a hora. Uma vez por jornada chega; nos outros dias reaproveita-se o
+// resultado que ja esta no boletim.
+async function duvidasSeNecessario(plantel, jornada, anterior, { log = () => {}, forcar = false } = {}) {
+  const guardadas = anterior?.duvidasIA ?? null;
+
+  // A consulta so acontece na mensagem de sexta, que e quando serve para
+  // alguma coisa — e o momento em que vais mesmo mexer na equipa. Nos
+  // outros dias reaproveita-se o que ja esta guardado, para a conta da API
+  // ser exactamente uma chamada por semana.
+  if (!forcar) return guardadas;
+
+  try {
+    return (await duvidasDaJornada(plantel, jornada, { log })) ?? guardadas;
+  } catch (erro) {
+    // Isto e um extra. Se falhar, a recolha continua — nunca vale a pena
+    // perder as lesoes por causa de uma consulta opcional.
+    log(`  Duvidas IA: falhou — ${erro.message.split('\n')[0]}`);
+    return guardadas;
+  }
+}
+
+// O zerozero devolve 403 a IPs de datacenter, mas continua a responder bem
+// do teu portatil e tem a tabela mais completa (separa duplo amarelo de
+// vermelho directo). Por isso tenta-se primeiro, e so se cair e que entra o
+// maisfutebol — que responde de qualquer lado mas traz menos detalhe.
+// Tenta a fonte principal e, se cair, a alternativa. Devolve [] se ambas
+// falharem — uma seccao em falta nao pode deitar abaixo a recolha toda.
+async function comAlternativa(nome, principal, alternativa, { log = () => {} } = {}) {
+  // Em local o zerozero responde, portanto a alternativa nunca era exercitada
+  // — testava-se um caminho e punha-se outro em producao. FORCAR_ALTERNATIVA=1
+  // salta a fonte principal para se poder testar em dev aquilo que o Railway
+  // vai mesmo correr.
+  if (process.env.FORCAR_ALTERNATIVA === '1') {
+    log(`  ${nome}: a saltar o zerozero (FORCAR_ALTERNATIVA=1)`);
+    return alternativa();
+  }
+
+  try {
+    return await principal();
+  } catch (erro) {
+    log(`  ${nome} (zerozero): ${erro.message.split('\n')[0]}`);
+    try {
+      return await alternativa();
+    } catch (erro2) {
+      log(`  ${nome} (maisfutebol): ${erro2.message.split('\n')[0]}`);
+      return [];
+    }
+  }
+}
+
+async function lerDisciplina({ log = () => {} } = {}) {
+  const linhas = await comAlternativa(
+    'Disciplina',
+    () => disciplinaDaLiga({ log }),
+    () => disciplinaMaisFutebol({ log }),
+    { log }
+  );
+  // Aqui o [] silencioso e perigoso: zero cartoes lidos passaria por "ninguem
+  // esta em risco de castigo", que e uma mentira tranquilizadora.
+  if (!linhas.length) throw new Error('Nenhuma fonte de disciplina respondeu.');
+  return linhas;
+}
+
 // -----------------------------------------------------------------------------
 // Duas recolhas.
 //
@@ -38,7 +109,7 @@ const MINIMO_PLAUSIVEL = 8;
 // custo.
 // -----------------------------------------------------------------------------
 
-export async function recolherLeve({ log = console.log } = {}) {
+export async function recolherLeve({ log = console.log, duvidasIA: forcarDuvidas = false } = {}) {
   const anterior = await lerBoletim();
 
   if (!anterior?.mercado?.length) {
@@ -70,7 +141,7 @@ export async function recolherLeve({ log = console.log } = {}) {
   let porConfirmar = [];
 
   try {
-    cartoes = await disciplinaDaLiga({ log });
+    cartoes = await lerDisciplina({ log });
     const r = castigosPorAcumulacao(cartoes, anterior.cartoes);
     ausencias = [...ausencias, ...r.castigados.filter((c) => c.certeza === 'alta')];
     porConfirmar = r.castigados.filter((c) => c.certeza === 'baixa');
@@ -123,6 +194,10 @@ export async function recolherLeve({ log = console.log } = {}) {
         return {
           ...j,
           golos: marcador?.golos ?? anteriorDoPlantel?.golos ?? 0,
+          // Quem bate os penaltis da equipa tem pontos quase garantidos de
+          // cada vez que a equipa ganha um. So o maisfutebol da esta coluna.
+          penaltis: marcador?.penaltis ?? anteriorDoPlantel?.penaltis ?? 0,
+          marcaPenaltis: marcador?.marcaPenaltis ?? anteriorDoPlantel?.marcaPenaltis ?? false,
           amarelos,
           vermelhos: disciplina?.vermelhos ?? 0,
           proximoJogo: anteriorDoPlantel?.proximoJogo ?? null,
@@ -145,6 +220,12 @@ export async function recolherLeve({ log = console.log } = {}) {
     cartoes,
     emRiscoDeCastigo,
     castigosPorConfirmar: porConfirmar,
+    // Campo proprio, deliberadamente fora de emRisco: isto e interpretacao
+    // de noticias, nao um facto lido de uma tabela.
+    duvidasIA: await duvidasSeNecessario(minhaEquipa.jogadores, jornada.numero, anterior, {
+      log,
+      forcar: forcarDuvidas,
+    }),
   };
 
   await guardarBoletim(boletim);
@@ -265,7 +346,7 @@ export async function recolher({ log = console.log, anterior = null } = {}) {
   let indiceCartoes = new Map();
 
   try {
-    cartoes = await disciplinaDaLiga({ log });
+    cartoes = await lerDisciplina({ log });
     const r = castigosPorAcumulacao(cartoes, anterior?.cartoes);
 
     // Separacao deliberada. Um castigo de certeza baixa (sem historico para
@@ -385,11 +466,16 @@ export async function recolher({ log = console.log, anterior = null } = {}) {
 
   const [tabela, listaJogos, golos] = await Promise.all([
     // A classificacao vem da mesma pagina dos jogos, lida pelo cabecalho.
-    classificacaoDaLiga({ log }).catch(() => []),
+    comAlternativa('Classificacao', () => classificacaoDaLiga({ log }), () => classificacaoMaisFutebol({ log }), { log }),
     // A jornada e um parametro do URL: pedimos a actual e a seguinte, cada
     // uma no seu pedido, para poderem ser mostradas separadas.
-    jogosDeVariasJornadas([jornada.numero, jornada.numero + 1], { log }).catch(() => []),
-    marcadoresDaLiga({ log }).catch(() => []),
+    comAlternativa(
+      'Jogos',
+      () => jogosDeVariasJornadas([jornada.numero, jornada.numero + 1], { log }),
+      () => jogosMaisFutebol([jornada.numero, jornada.numero + 1], { log }),
+      { log }
+    ),
+    comAlternativa('Golos', () => marcadoresDaLiga({ log }), () => marcadoresMaisFutebol({ log }), { log }),
   ]);
 
   const proximosJogos = { dados: listaJogos };
@@ -468,6 +554,9 @@ export async function recolher({ log = console.log, anterior = null } = {}) {
     // novo de um ja cumprido.
     cartoes,
     emRiscoDeCastigo,
+    // Campo proprio, deliberadamente fora de emRisco: isto e interpretacao
+    // de noticias, nao um facto lido de uma tabela.
+    duvidasIA: await duvidasSeNecessario(minhaEquipa.jogadores, jornada.numero, anterior, { log }),
     classificacao: tabela,
     proximosJogos: proximosJogos.dados,
     castigosPorConfirmar: porConfirmar,

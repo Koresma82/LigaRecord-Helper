@@ -219,11 +219,31 @@ export function resumoSemanal(boletim) {
   const lesionados = naLiga.filter((j) => j.ausencia?.tipo === 'lesao').length;
   const castigados = naLiga.filter((j) => j.ausencia?.tipo === 'castigo').length;
 
+  // Duvidas recolhidas por IA das noticias da semana. Ficam DEPOIS de tudo
+  // o que e facto, com a origem a vista: sao para confirmares, nao para
+  // agires directamente. Nunca se somam a contagem dos que estao de fora.
+  const ia = boletim.duvidasIA;
+  if (ia?.duvidas?.length) {
+    linhas.push('', `📰 *Nas notícias desta semana* (não confirmado)`);
+    for (const d of ia.duvidas) {
+      const confianca = d.confianca === 'alta' ? '' : ` _(confiança ${d.confianca})_`;
+      linhas.push(`• *${d.nome}* — ${d.motivo}${confianca}`);
+      if (d.fonte) linhas.push(`  ${d.fonte}`);
+    }
+  }
+
   linhas.push('', `_Na liga: ${lesionados} lesionados, ${castigados} castigados._`);
 
   if (boletim.avisos?.length) {
     linhas.push('', boletim.avisos.map((a) => '⚠️ ' + a).join('\n'));
   }
+
+  // O lembrete vai SEMPRE, mesmo quando nao ha nada de errado com o plantel.
+  // O objectivo da mensagem de sexta e levar-te ao site; se so aparecesse
+  // quando ha problemas, uma semana calma passava despercebida e o fecho
+  // apanhava-te distraido.
+  linhas.push('', '👉 Vai à Liga Record confirmar a equipa antes do fecho.');
+  linhas.push('https://www.record.pt/liga-record');
 
   return linhas.join('\n');
 }

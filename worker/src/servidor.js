@@ -4,7 +4,8 @@ import cron from 'node-cron';
 import { bot, avisar } from './bot/bot.js';
 import { recolher, recolherLeve } from './recolher.js';
 import { lerBoletim } from './firestore.js';
-import { alertaNovidade, resumoSemanal, erroRecolha } from './bot/mensagens.js';
+import { alertaNovidade, erroRecolha } from './bot/mensagens.js';
+import { enviarResumoSemanal } from './tarefas.js';
 
 const PORTA = process.env.PORT || 3000;
 const FUSO = 'Europe/Lisbon';
@@ -71,16 +72,15 @@ async function diaria() {
 }
 
 async function mensagemDeSexta() {
-  try {
-    // Recolhe primeiro, para a mensagem levar o que ha de mais recente.
-    const boletim = await recolherLeve({ log: () => {} });
+  // A rotina vive em tarefas.js para o `npm run sexta` correr o mesmo
+  // codigo. Aqui so se actualiza o estado que a pagina /saude mostra.
+  const r = await enviarResumoSemanal({ log: () => {} });
+  if (r.ok) {
     ultimaRecolha = new Date().toISOString();
     ultimoErro = null;
-    await avisar(resumoSemanal(boletim));
-  } catch (erro) {
-    ultimoErro = erro.message;
-    console.error(erro.message);
-    await avisar(erroRecolha(erro.message)).catch(() => {});
+  } else {
+    ultimoErro = r.erro;
+    console.error(r.erro);
   }
 }
 

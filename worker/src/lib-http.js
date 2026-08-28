@@ -2,7 +2,30 @@ import { request } from 'undici';
 
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
-  '(KHTML, like Gecko) Chrome/126.0 Safari/537.36';
+  '(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+
+// O conjunto que um Chrome real manda numa navegacao normal. So o
+// user-agent nao chega: ha filtros que reparam na falta do accept-language
+// ou dos sec-fetch-*, porque nenhum browser os omite.
+//
+// Isto NAO resolve bloqueios por IP. Se um site recusar gamas de datacenter,
+// nenhum header o convence — e o sintoma e o mesmo 403.
+const CABECALHOS_BROWSER = {
+  accept:
+    'text/html,application/xhtml+xml,application/xml;q=0.9,' +
+    'image/avif,image/webp,*/*;q=0.8',
+  'accept-language': 'pt-PT,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+  'cache-control': 'no-cache',
+  pragma: 'no-cache',
+  'sec-ch-ua': '"Chromium";v="126", "Google Chrome";v="126", "Not-A.Brand";v="99"',
+  'sec-ch-ua-mobile': '?0',
+  'sec-ch-ua-platform': '"Windows"',
+  'sec-fetch-dest': 'document',
+  'sec-fetch-mode': 'navigate',
+  'sec-fetch-site': 'none',
+  'sec-fetch-user': '?1',
+  'upgrade-insecure-requests': '1',
+};
 
 export const pausa = (ms = 1200) => new Promise((r) => setTimeout(r, ms));
 
@@ -107,7 +130,11 @@ export async function pedido(
       method: metodo,
       headers: {
         'user-agent': UA,
-        accept: 'text/html,application/json,*/*',
+        ...CABECALHOS_BROWSER,
+        // Um pedido vindo de dentro do proprio site leva referer. Sem ele,
+        // parece sempre que alguem colou o URL a frio — que e o padrao que
+        // os filtros procuram.
+        referer: `${new URL(alvo).origin}/`,
         ...(paraEnviar ? { cookie: paraEnviar } : {}),
         ...(corpo && metodo === 'POST'
           ? { 'content-type': 'application/x-www-form-urlencoded' }
@@ -144,7 +171,19 @@ export async function seguirAte(url) {
 
 export async function getHTML(url, frasco) {
   const r = await pedido(url, { frasco });
-  if (r.status >= 400) throw new Error(`HTTP ${r.status} em ${url}`);
+  if (r.status >= 400) {
+    // O 403 tem uma causa quase sempre diferente das outras e merece ser
+    // dito por palavras, senao passam-se horas a mexer em selectores
+    // quando o problema e nunca ter chegado HTML nenhum.
+    if (r.status === 403) {
+      throw new Error(
+        `HTTP 403 em ${url} — o site recusou o pedido. ` +
+          'Se isto so acontece no servidor e nao em local, e bloqueio por IP ' +
+          'de datacenter e nao ha header que o resolva.'
+      );
+    }
+    throw new Error(`HTTP ${r.status} em ${url}`);
+  }
   return r.texto;
 }
 
