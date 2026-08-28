@@ -328,6 +328,31 @@ export async function recolher({ log = console.log, anterior = null } = {}) {
     ? emparelhar(todosJogadores, ausencias)
     : { ligados: [], ambiguos: [], semCorrespondencia: [] };
 
+  // Sem isto o log dizia "13 lesionados" e depois "0 de fora", e nao havia
+  // como saber se era boa noticia (nenhum e teu) ou emparelhamento partido.
+  // Estes numeros distinguem as duas coisas.
+  if (ausencias.length) {
+    const naoLigadas = ausencias.length - emparelhado.ligados.length - emparelhado.ambiguos.length;
+    log(
+      `  Emparelhamento: ${emparelhado.ligados.length}/${ausencias.length} ligadas ao mercado` +
+        (emparelhado.ambiguos.length ? `, ${emparelhado.ambiguos.length} ambiguas` : '') +
+        (naoLigadas > 0 ? `, ${naoLigadas} sem correspondencia` : '')
+    );
+
+    // Se mais de metade nao encontra dono, o problema esta nos nomes ou nas
+    // equipas — nao na liga estar saudavel.
+    if (emparelhado.ligados.length * 2 < ausencias.length) {
+      const orfas = emparelhado.semCorrespondencia ?? [];
+      for (const a of orfas.slice(0, 5)) {
+        log(`    sem par: ${a.nome} (${a.equipa})`);
+      }
+      avisos.push(
+        `So ${emparelhado.ligados.length} de ${ausencias.length} ausencias foram ` +
+          'ligadas a jogadores do mercado. Os nomes ou as equipas nao estao a bater certo.'
+      );
+    }
+  }
+
   const indisponiveis = new Set(
     emparelhado.ligados.filter((j) => j.ausencia.tipo !== 'duvida').map((j) => j.id)
   );
@@ -463,7 +488,12 @@ export async function recolher({ log = console.log, anterior = null } = {}) {
   };
 
   await guardarBoletim(boletim);
-  log(`Boletim guardado. ${forasCertos.length} de fora, ${emRisco.length - forasCertos.length} em duvida.`);
+  log(
+    `Boletim guardado. ${forasCertos.length} de fora, ` +
+      `${emRisco.length - forasCertos.length} em duvida ` +
+      `(de ${minhaEquipa.jogadores.length} no teu plantel; ` +
+      `${emparelhado.ligados.length} ausencias em toda a liga).`
+  );
 
   return boletim;
 }
