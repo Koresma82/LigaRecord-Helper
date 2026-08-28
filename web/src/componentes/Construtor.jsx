@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { montarPlantel, FORMACAO } from '../../../partilhado/montar-plantel.js';
+import { montarPlantel, FORMACAO } from '../../../worker/src/partilhado/montar-plantel.js';
 import { euros } from '../lib/formatar.js';
 import { guardarPlantel } from '../lib/firebase.js';
 import { Grelha } from './Cartoes.jsx';

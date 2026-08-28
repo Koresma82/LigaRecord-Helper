@@ -16,7 +16,7 @@ import { normalizar, equipaCanonica } from './normalizar.js';
 import { criarIndice, procurar } from './emparelhar-jogador.js';
 import { sugerirSubstituicoes } from './sugerir.js';
 import { guardarBoletim, lerBoletim } from './firestore.js';
-import { montarPlantel } from '../../partilhado/montar-plantel.js';
+import { montarPlantel } from './partilhado/montar-plantel.js';
 
 // Menos ausencias do que isto em toda a liga significa quase de certeza
 // que o scraping partiu, nao que a liga esta saudavel.

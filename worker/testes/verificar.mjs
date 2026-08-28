@@ -21,7 +21,7 @@ const ESPERADO = {
   '../src/config/equipas.js': ['EQUIPAS', 'EQUIPAS_ZEROZERO'],
   '../src/bot/mensagens.js': ['resumoJornada', 'alertaNovidade', 'erroRecolha', 'resumoPlantel'],
   '../src/recolher.js': ['recolher', 'recolherLeve', 'recolherEDetectarNovidades'],
-  '../../partilhado/montar-plantel.js': ['montarPlantel', 'FORMACAO', 'ORCAMENTO'],
+  '../src/partilhado/montar-plantel.js': ['montarPlantel', 'FORMACAO', 'ORCAMENTO'],
 };
 
 import { existsSync } from 'node:fs';

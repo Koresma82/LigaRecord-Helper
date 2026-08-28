@@ -41,6 +41,11 @@
     X-Frame-Options = "DENY"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
+    # O login do Google abre um popup e fecha-o quando acaba. Sem isto o
+    # Chrome bloqueia o window.close e enche a consola de avisos de COOP.
+    # "same-origin-allow-popups" mantem o isolamento da pagina e deixa
+    # passar so o popup que nos abrimos.
+    Cross-Origin-Opener-Policy = "same-origin-allow-popups"
 
 [[headers]]
   for = "/assets/*"

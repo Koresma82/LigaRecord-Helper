@@ -11,6 +11,7 @@ const FUSO = 'Europe/Lisbon';
 
 let ultimaRecolha = null;
 let ultimoErro = null;
+const arrancouEm = new Date().toISOString();
 
 // -----------------------------------------------------------------------------
 // Calendario
@@ -89,18 +90,38 @@ cron.schedule('0 8 * * 5', mensagemDeSexta, { timezone: FUSO });
 
 // O Railway mata servicos sem porta a escutar. Isto tambem serve de
 // pagina de saude para saberes se o worker esta vivo.
+//
+// Responde SEMPRE 200 quando o processo esta de pe, mesmo com a ultima
+// recolha falhada. Sao duas perguntas diferentes: "o worker esta vivo?" e
+// "a ultima recolha correu bem?". O Railway so sabe fazer a primeira, e
+// devolver-lhe 503 por causa da segunda punha-o a reiniciar o servico em
+// ciclo de cada vez que o Zerozero mudasse um selector — exactamente
+// quando o worker precisa de ficar de pe para o poderes inspeccionar.
+// O estado da recolha vai no corpo, para tu o leres.
 http
   .createServer((req, res) => {
     if (req.url === '/saude') {
-      res.writeHead(ultimoErro ? 503 : 200, { 'content-type': 'application/json' });
+      res.writeHead(200, { 'content-type': 'application/json' });
       return res.end(
-        JSON.stringify({ ultimaRecolha, ultimoErro, bot: Boolean(bot) }, null, 2)
+        JSON.stringify(
+          {
+            estado: 'vivo',
+            ultimaRecolha,
+            ultimaRecolhaOk: !ultimoErro,
+            ultimoErro,
+            bot: Boolean(bot),
+            ambiente: process.env.AMBIENTE ?? 'dev',
+            arrancouEm,
+          },
+          null,
+          2
+        )
       );
     }
     res.writeHead(200, { 'content-type': 'text/plain' });
     res.end('boletim-worker\n');
   })
-  .listen(PORTA, () => console.log(`Worker a escutar na porta ${PORTA}`));
+  .listen(PORTA, '0.0.0.0', () => console.log(`Worker a escutar na porta ${PORTA}`));
 
 if (bot) {
   bot.start();
@@ -110,4 +131,13 @@ if (bot) {
 }
 
 // Uma recolha leve ao arrancar, para nao esperar pelo proximo cron.
+// Sem await de proposito: o servidor ja esta a escutar e o healthcheck do
+// Railway nao pode ficar a espera de uma recolha completa para responder.
 diaria();
+
+// Uma excepcao solta nao pode derrubar o worker: perder-se-ia o cron todo
+// por causa de um pedido HTTP que correu mal.
+process.on('unhandledRejection', (e) => {
+  ultimoErro = e?.message ?? String(e);
+  console.error('Promessa rejeitada sem tratamento:', ultimoErro);
+});

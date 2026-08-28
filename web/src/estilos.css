@@ -648,3 +648,41 @@ html, body {
 .jogos:not(.jogos--destaque) .jogo:hover {
   opacity: 1;
 }
+
+/* Ecra de arranque falhado: sem config do Firebase nao ha nada para mostrar.
+   Estilo minimo e independente do resto, para nao depender de nada que
+   tambem possa estar partido. */
+.config-em-falta {
+  max-width: 34rem;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem;
+  color: #E8F0EA;
+  font-family: 'Archivo', system-ui, sans-serif;
+  line-height: 1.55;
+}
+.config-em-falta h1 {
+  font-size: 1.35rem;
+  margin: 0 0 1rem;
+  color: #FF6B6B;
+}
+.config-em-falta code {
+  font-family: 'Roboto Mono', monospace;
+  font-size: 0.85em;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 0.1em 0.4em;
+  border-radius: 3px;
+}
+.config-em-falta ul,
+.config-em-falta ol {
+  padding-left: 1.25rem;
+}
+.config-em-falta li {
+  margin: 0.4rem 0;
+}
+.config-em-falta .nota {
+  opacity: 0.7;
+  font-size: 0.9rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  padding-top: 1rem;
+  margin-top: 1.5rem;
+}

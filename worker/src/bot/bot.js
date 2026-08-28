@@ -1,7 +1,7 @@
 import { Bot } from 'grammy';
 import { lerBoletim, guardarPerfil, lerPerfil } from '../firestore.js';
 import { recolher, recolherLeve } from '../recolher.js';
-import { montarPlantel } from '../../../partilhado/montar-plantel.js';
+import { montarPlantel } from '../partilhado/montar-plantel.js';
 import { resumoJornada, resumoPlantel, resumoSemanal } from './mensagens.js';
 
 const TOKEN = process.env.TELEGRAM_TOKEN;

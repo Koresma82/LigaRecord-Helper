@@ -10,7 +10,26 @@ import { getFirestore, doc, onSnapshot, setDoc, getDoc } from 'firebase/firestor
 
 // Estas chaves sao publicas por desenho — quem protege os dados sao as
 // regras do Firestore (ver firestore.rules), nao o segredo da config.
-const config = {
+//
+// O Vite substitui os import.meta.env.VITE_* pelo valor literal no momento
+// do BUILD. Se a variavel nao existir nessa altura, fica undefined no
+// bundle e nao ha nada em runtime que a salve.
+const VARIAVEIS = {
+  apiKey: 'VITE_FIREBASE_API_KEY',
+  authDomain: 'VITE_FIREBASE_AUTH_DOMAIN',
+  projectId: 'VITE_FIREBASE_PROJECT_ID',
+  storageBucket: 'VITE_FIREBASE_STORAGE_BUCKET',
+  messagingSenderId: 'VITE_FIREBASE_SENDER_ID',
+  appId: 'VITE_FIREBASE_APP_ID',
+};
+
+// Aspas coladas ao valor sao o erro classico: o dotenv tira-as em local, o
+// painel do Netlify nao. Tiramo-las aqui para o mesmo copy-paste funcionar
+// nos dois sitios.
+const limpar = (v) =>
+  typeof v === 'string' ? v.trim().replace(/^['"]|['"]$/g, '') : v;
+
+const bruto = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
@@ -19,9 +38,17 @@ const config = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-const app = initializeApp(config);
-export const auth = getAuth(app);
-export const db = getFirestore(app);
+const config = Object.fromEntries(
+  Object.entries(bruto).map(([k, v]) => [k, limpar(v)])
+);
+
+// Quais e que faltam. Sem isto o Firebase rebenta com auth/invalid-api-key
+// e um ecra preto, que nao diz a ninguem qual das seis e que falhou.
+export const emFalta = Object.keys(VARIAVEIS).filter((k) => !config[k]);
+
+const app = emFalta.length === 0 ? initializeApp(config) : null;
+export const auth = app ? getAuth(app) : null;
+export const db = app ? getFirestore(app) : null;
 
 const google = new GoogleAuthProvider();
 
