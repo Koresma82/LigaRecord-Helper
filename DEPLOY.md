@@ -192,7 +192,10 @@ Volta ao browser: a app enche-se sozinha, sem refresh.
    `LigaRecord-Helper`.
 
 2. Confirma que apanhou o `netlify.toml`: base `web`, comando
-   `npm run build`, publish `web/dist`. Não mexas.
+   `npm run build`, publish `dist`. Não mexas.
+
+   O `publish` é relativo à base. Se lá estiver `web/dist`, o Netlify vai
+   procurar `web/web/dist` e falha com "deploy directory does not exist".
 
 3. **Site configuration → Environment variables** → Add a variable →
    **Add multiple** e cola os seis:
@@ -208,6 +211,17 @@ VITE_FIREBASE_APP_ID
 
 **Não metas `VITE_AMBIENTE`** — esse vem do `netlify.toml` conforme o ramo, e
 se o puseres aqui sobrepõe-se aos três contextos.
+
+**Não marques nenhuma destas como "secret".** São valores públicos: o Vite
+escreve-os dentro do JavaScript que serves ao browser, logo qualquer pessoa
+os consegue ler no DevTools. Marcá-las como secretas só faz o build chumbar.
+O que impede outra pessoa de ler os teus dados são as `firestore.rules`.
+
+Se ainda assim o build chumbar com *"Exposed secrets detected"* e uma chave
+`AIza…`, é o secret scanning a apanhar a chave do Firebase no bundle. O
+`netlify.toml` já traz as duas variáveis que o desligam para este site
+(`SECRETS_SCAN_OMIT_KEYS` e `SECRETS_SCAN_SMART_DETECTION_ENABLED`) — basta
+fazer o push e voltar a correr o deploy.
 
 4. **Build & deploy → Branches and deploy contexts** → Production branch
    `main`, e em "Branch deploys" escolhe **Let me add individual branches** →
@@ -290,6 +304,8 @@ aberto no telemóvel.
 | `'rm' is not recognized` | CMD outra vez — `del` para ficheiros, `rmdir /s` para pastas |
 | App em branco, consola diz `permission-denied` | Regras do Firestore por publicar |
 | Login funciona em localhost, rebenta no Netlify | Domínio em falta nos Authorized domains |
+| Build chumba com `Exposed secrets detected` / `AIza***` | Secret scanning a ver a chave pública do Firebase no bundle — o `netlify.toml` já a isenta |
+| `Deploy directory does not exist` | `publish` no `netlify.toml` com o prefixo `web/` a mais |
 | `Falta FIREBASE_SERVICE_ACCOUNT` | JSON com quebras de linha; tem de ser uma linha |
 | `Unexpected token` ao ler o JSON | Puseste aspas à volta do valor no `.env` — tira-as |
 | `Sem plantel registado` | Abre a app → Construir → Gravar como o meu plantel |

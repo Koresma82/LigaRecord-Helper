@@ -1,7 +1,22 @@
 [build]
   base    = "web"
   command = "npm run build"
-  publish = "web/dist"
+  # Relativo à base. Com base = "web", "dist" resolve para web/dist.
+  # Escrever "web/dist" aqui daria web/web/dist e falharia a seguir.
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+  # A config do Firebase para browser é pública por desenho: o Vite injecta
+  # as VITE_* no bundle e é assim que tem de ser. Quem fecha os dados são as
+  # firestore.rules, não o segredo da chave. Sem estas duas linhas o
+  # secret scanning do Netlify vê o AIza... no dist/ e chumba o build.
+  SECRETS_SCAN_OMIT_KEYS = "VITE_FIREBASE_API_KEY,VITE_FIREBASE_AUTH_DOMAIN,VITE_FIREBASE_PROJECT_ID,VITE_FIREBASE_STORAGE_BUCKET,VITE_FIREBASE_SENDER_ID,VITE_FIREBASE_APP_ID"
+
+  # A deteção inteligente reconhece o formato AIza... independentemente do
+  # nome da variável, por isso a linha de cima sozinha não chega.
+  SECRETS_SCAN_SMART_DETECTION_ENABLED = "false"
 
 # Um site do Netlify, tres contextos. O branch deploy da main e producao;
 # dev e test ganham URLs proprios (dev--nome-do-site.netlify.app).
