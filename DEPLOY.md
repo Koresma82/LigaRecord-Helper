@@ -133,54 +133,31 @@ npm run verificar
 ```
 
 Confirma que todos os módulos carregam e exportam o que os outros esperam.
-São dois segundos e evita descobrir um import partido a meio do login.
+São dois segundos e evita descobrir um import partido a meio de uma recolha.
 
-Agora o teste a sério:
-
-```cmd
-npm run descobrir login
-```
-
-Só encontra e analisa o formulário — não autentica. Se ele avisar que há
-reCAPTCHA, corre isto antes de mais nada:
-
-```cmd
-npm run analisar-login
-```
-
-Lê o `debug/login.html` já gravado, sem tocar no servidor deles, e diz-te se
-o reCAPTCHA está dentro do formulário de login ou no de registo de conta
-nova. São coisas muito diferentes: no registo, não nos afecta.
-
-Se estiver limpo:
-
-```cmd
-npm run descobrir
-```
-
-Se ele autenticar no SSO mas não conseguir a sessão do site, corre:
-
-```cmd
-npm run analisar-resposta
-```
-
-Lê o `debug/login-resposta.txt` e imprime a estrutura da resposta com os
-valores mascarados — comprimento e formato, nunca o conteúdo. Esse output
-podes colar à vontade.
-
-**Se o login falhar, não insistas.** O worker pára sozinho ao fim de três
-tentativas seguidas para não arriscar bloquear a conta, mas se andares a
-correr o comando à mão o contador reinicia a cada arranque. Confirma o email
-e a password antes de tentar outra vez.
-
-**É aqui que vais saber se isto funciona.** Espera ver a sessão a abrir e as
-quatro posições a devolver jogadores.
-
-Se correr bem:
+Agora a recolha a sério:
 
 ```cmd
 npm run recolher
 ```
+
+**É aqui que vais saber se isto funciona.** Espera ver as ausências do
+Zerozero e o plantel a sair do Firestore.
+
+Se o Zerozero não devolver nada:
+
+```cmd
+npm run inspect-zerozero
+```
+
+Grava a página em `worker\debug\` e imprime a estrutura que encontrou, para
+se perceber que selector é que mudou. Há também `npm run inspect-jornada`
+para o mesmo efeito na leitura do número da jornada.
+
+**O worker já não faz login na Liga Record.** O SSO deles usa iframes, que um
+cliente HTTP não reproduz, por isso essa via foi abandonada — é por isso que
+o plantel se grava na app (Construir → Gravar como o meu plantel) e o worker
+o lê do Firestore.
 
 Volta ao browser: a app enche-se sozinha, sem refresh.
 
@@ -310,9 +287,7 @@ aberto no telemóvel.
 | `Unexpected token` ao ler o JSON | Puseste aspas à volta do valor no `.env` — tira-as |
 | `Sem plantel registado` | Abre a app → Construir → Gravar como o meu plantel |
 | `permission-denied` ao gravar plantel | Regras do Firestore desactualizadas — republica-as |
-| `So li N jogadores` | A sessão caiu, ou o `playersearch.ashx` mudou |
-| `A pagina diz que tens plantel, mas...` | Parser do plantel desactualizado — `npm run inspect-plantel` |
-| `So N ausencias em toda a liga` | Selectores do Zerozero desatualizados — `npm run inspect` |
+| `So N ausencias em toda a liga` | Selectores do Zerozero desatualizados — `npm run inspect-zerozero` |
 | Railway a reiniciar em ciclo | Root Directory não está em `worker` |
 | `does not provide an export named` | Corre `npm run verificar` — diz-te qual é |
 | `EPERM` ou `EBUSY` no npm install | Antivírus ou OneDrive a segurar ficheiros |
@@ -326,10 +301,10 @@ parecem bugs do código e não são. `C:\Projectos\` está bem.
 
 ## O que esperar da primeira tentativa
 
-O login da Liga Record e o scraping do Zerozero **nunca correram contra os
-sites reais**. Foram escritos a partir das tuas screenshots e testados contra
-HTML que eu construí. O passo 3 é onde isso se vai ver.
+O scraping do Zerozero **nunca correu contra o site real**. Foi escrito a
+partir das tuas screenshots e testado contra HTML que eu construí. O passo 3
+é onde isso se vai ver.
 
-O mais provável é o Zerozero falhar: os 18 ids são adivinhados e os selectores
-também. Manda-me o erro e o conteúdo de `worker\debug\` e corrijo. A parte da
-Liga Record tem melhor prognóstico, porque vi a estrutura real.
+O mais provável é falhar: os 18 ids são adivinhados e os selectores também.
+Corre `npm run inspect-zerozero`, manda-me o erro e o conteúdo de
+`worker\debug\` e corrijo.
