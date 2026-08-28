@@ -1,8 +1,12 @@
-export const euros = (v) =>
-  new Intl.NumberFormat('pt-PT', {
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
-  }).format(v ?? 0) + 'M';
+export const euros = (v) => {
+  if (!v) return '—';
+  return (
+    new Intl.NumberFormat('pt-PT', {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    }).format(v) + 'M'
+  );
+};
 
 export const sinal = (v) => (v > 0 ? `+${v.toFixed(1)}` : v.toFixed(1));
 

@@ -1,5 +1,5 @@
 {
-  "name": "boletim-worker",
+  "name": "ligarecord-helper-worker",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -9,8 +9,9 @@
   "scripts": {
     "start": "node src/servidor.js",
     "recolher": "node src/recolher.js",
-    "inspect": "node src/inspect.js",
-    "descobrir": "node src/descobrir.js"
+    "verificar": "node testes/verificar.mjs",
+    "inspect-jornada": "node src/inspect-jornada.js",
+    "inspect-zerozero": "node src/inspect-zerozero.js"
   },
   "dependencies": {
     "cheerio": "^1.0.0",

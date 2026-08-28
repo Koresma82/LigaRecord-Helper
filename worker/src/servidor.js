@@ -2,8 +2,9 @@ import 'dotenv/config';
 import http from 'node:http';
 import cron from 'node-cron';
 import { bot, avisar } from './bot/bot.js';
-import { recolherEDetectarNovidades } from './recolher.js';
-import { alertaNovidade, resumoJornada, erroRecolha } from './bot/mensagens.js';
+import { recolher, recolherLeve } from './recolher.js';
+import { lerBoletim } from './firestore.js';
+import { alertaNovidade, resumoSemanal, erroRecolha } from './bot/mensagens.js';
 
 const PORTA = process.env.PORT || 3000;
 const FUSO = 'Europe/Lisbon';
@@ -11,20 +12,31 @@ const FUSO = 'Europe/Lisbon';
 let ultimaRecolha = null;
 let ultimoErro = null;
 
-async function ciclo({ resumoCompleto = false } = {}) {
+// -----------------------------------------------------------------------------
+// Calendario
+//
+//   Todos os dias 07:00   recolha LEVE: so lesoes e cartoes, reaproveitando
+//                         o mercado da ultima completa. Silenciosa, excepto
+//                         se alguem do TEU plantel mudar de estado.
+//
+//   Quarta 08:00          recolha COMPLETA: mercado, valores, classificacao,
+//                         jogos, golos. Os valores da Liga Record sao
+//                         actualizados a quarta, no maximo.
+//
+//   Sexta 08:00           A MENSAGEM. Lesionados e castigados, quais sao
+//                         teus, e o aviso para ires actualizar a equipa.
+//
+// A diaria e leve de proposito: varrer 538 jogadores todos os dias para
+// descobrir que ninguem se lesionou seria desperdicio, e mais uma
+// oportunidade de sermos barrados.
+// -----------------------------------------------------------------------------
+
+async function completa() {
   try {
-    const { boletim, novidades, recuperados } = await recolherEDetectarNovidades();
+    await recolher();
     ultimaRecolha = new Date().toISOString();
     ultimoErro = null;
-
-    if (resumoCompleto) {
-      await avisar(resumoJornada(boletim));
-    } else {
-      // Durante a semana so avisamos quando muda alguma coisa.
-      // Uma mensagem por dia a dizer o mesmo deixa de ser lida.
-      const texto = alertaNovidade({ novidades, recuperados });
-      if (texto) await avisar(texto);
-    }
+    console.log('Recolha completa concluida.');
   } catch (erro) {
     ultimoErro = erro.message;
     console.error(erro.message);
@@ -32,12 +44,48 @@ async function ciclo({ resumoCompleto = false } = {}) {
   }
 }
 
-// Quinta 18:00 — saiu o mapa de castigos.
-cron.schedule('0 18 * * 4', () => ciclo(), { timezone: FUSO });
-// Sexta 12:00 e 19:00 — conferencias de imprensa.
-cron.schedule('0 12,19 * * 5', () => ciclo(), { timezone: FUSO });
-// Sabado 09:00 — resumo completo antes do fecho do mercado.
-cron.schedule('0 9 * * 6', () => ciclo({ resumoCompleto: true }), { timezone: FUSO });
+async function diaria() {
+  try {
+    const anterior = await lerBoletim();
+    const antes = new Set((anterior?.emRisco ?? []).map((j) => j.id));
+
+    const boletim = await recolherLeve({ log: () => {} });
+    ultimaRecolha = new Date().toISOString();
+    ultimoErro = null;
+
+    const novidades = boletim.emRisco.filter((j) => !antes.has(j.id));
+    const recuperados = (anterior?.emRisco ?? []).filter(
+      (a) => !boletim.emRisco.some((j) => j.id === a.id)
+    );
+
+    // So falamos se algo mudou no TEU plantel. Uma mensagem diaria a dizer
+    // "esta tudo na mesma" deixa de ser lida ao fim de uma semana.
+    const texto = alertaNovidade({ novidades, recuperados });
+    if (texto) await avisar(texto);
+  } catch (erro) {
+    ultimoErro = erro.message;
+    console.error(erro.message);
+    await avisar(erroRecolha(erro.message)).catch(() => {});
+  }
+}
+
+async function mensagemDeSexta() {
+  try {
+    // Recolhe primeiro, para a mensagem levar o que ha de mais recente.
+    const boletim = await recolherLeve({ log: () => {} });
+    ultimaRecolha = new Date().toISOString();
+    ultimoErro = null;
+    await avisar(resumoSemanal(boletim));
+  } catch (erro) {
+    ultimoErro = erro.message;
+    console.error(erro.message);
+    await avisar(erroRecolha(erro.message)).catch(() => {});
+  }
+}
+
+cron.schedule('0 7 * * *', diaria, { timezone: FUSO });
+cron.schedule('0 8 * * 3', completa, { timezone: FUSO });
+cron.schedule('0 8 * * 5', mensagemDeSexta, { timezone: FUSO });
 
 // O Railway mata servicos sem porta a escutar. Isto tambem serve de
 // pagina de saude para saberes se o worker esta vivo.
@@ -61,5 +109,5 @@ if (bot) {
   console.log('Sem TELEGRAM_TOKEN — o bot fica desligado, o cron continua.');
 }
 
-// Uma recolha ao arrancar, para nao esperar pelo proximo cron.
-ciclo();
+// Uma recolha leve ao arrancar, para nao esperar pelo proximo cron.
+diaria();

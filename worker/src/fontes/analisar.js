@@ -1,20 +1,96 @@
 // -----------------------------------------------------------------------------
-// Leitura dos cartoes de jogador.
+// Leitura dos jogadores.
 //
-// A estrutura real, confirmada no inspector:
+// O playersearch.ashx devolve JSON, nao HTML. Um objecto por jogador:
 //
-//   <article class="player-card player-search-itm"
-//            data-position="goalkeeper" id="playerSearched41768">
-//     <figure>… nome, clube, pontos, % …</figure>
-//     <div class="value">
-//       <div class="value-va">€ 2.000.000 V.A.</div>
-//       <div class="value-vi">€ 2.000.000 V.I.</div>
-//     </div>
-//     <a href="javascript:BuyPlayer('41768')">…</a>
-//   </article>
+//   {"Id":42896,"IdPlayer":42896,"Name":"Pavlidis","NameClub":"Benfica",
+//    "ShirtUrl":"...","PhotoUrl":"/common/images/photos/p42896.jpg",
+//    "PlayerPosition":"AV","InitialValue":6000000,"CurrentValue":...,
+//    "Points":0,"PercentTeams":"55,45","RenegotiationAvailable":false,
+//    "InTeam":true}
 //
-// O id verdadeiro do jogador esta em dois sitios (o id do article e o
-// argumento do BuyPlayer). Usamos esse — nao o nome — como chave.
+// Isto e muito melhor do que raspar cartoes: nada de selectores para
+// partir, ids verdadeiros, e valores em numero em vez de texto formatado.
+// A leitura de HTML fica so para a pagina do plantel.
+// -----------------------------------------------------------------------------
+
+const POSICAO = { GR: 'GR', DF: 'DEF', MD: 'MED', AV: 'AVA' };
+
+// Os valores vem em euros: 6000000 -> 6.0
+const paraMilhoesNumero = (n) =>
+  Number.isFinite(Number(n)) ? Number((Number(n) / 1_000_000).toFixed(3)) : 0;
+
+// "55,45" -> 55.45
+const percentagem = (v) => {
+  if (v === null || v === undefined) return null;
+  const n = Number(String(v).replace(',', '.'));
+  return Number.isFinite(n) ? n : null;
+};
+
+export function lerJogadorJSON(bruto) {
+  const id = bruto.IdPlayer ?? bruto.Id;
+  const nome = bruto.Name;
+  if (!id || !nome) return null;
+
+  const posicao = POSICAO[bruto.PlayerPosition] ?? bruto.PlayerPosition ?? null;
+  if (!posicao) return null;
+
+  const custo = paraMilhoesNumero(bruto.CurrentValue);
+  const valorInicial = paraMilhoesNumero(bruto.InitialValue) || custo;
+
+  // "PointsTotal" aparece truncado na captura; aceitamos as variantes.
+  const pontosTotais = Number(
+    bruto.PointsTotal ?? bruto.PointsTotais ?? bruto.TotalPoints ?? bruto.Points ?? 0
+  );
+
+  return {
+    id: String(id),
+    nome: String(nome).trim(),
+    equipa: bruto.NameClub ?? '',
+    posicao,
+    custo,
+    valorInicial,
+    valorizacao: Number((custo - valorInicial).toFixed(3)),
+    pontosTotais,
+    mediaPontos: pontosTotais,
+    pontosUltimaRonda: Number(bruto.Points ?? 0),
+    percentagemEquipas: percentagem(bruto.PercentTeams),
+    // ATENCAO: na captura vinha true para todos os jogadores do Benfica com
+    // o plantel vazio, por isso NAO significa "esta na minha equipa".
+    // Fica guardado, mas quem decide o plantel e a pagina plantel.aspx.
+    inTeam: bruto.InTeam ?? null,
+    renegociavel: bruto.RenegotiationAvailable ?? null,
+  };
+}
+
+export function lerJogadoresJSON(texto) {
+  let dados;
+  try {
+    dados = typeof texto === 'string' ? JSON.parse(texto) : texto;
+  } catch {
+    return null; // nao e JSON — quem chama que tente o HTML
+  }
+
+  const lista = Array.isArray(dados)
+    ? dados
+    : Array.isArray(dados?.data)
+      ? dados.data
+      : Array.isArray(dados?.Players)
+        ? dados.Players
+        : null;
+
+  if (!lista) return null;
+
+  const porId = new Map();
+  for (const bruto of lista) {
+    const j = lerJogadorJSON(bruto);
+    if (j && !porId.has(j.id)) porId.set(j.id, j);
+  }
+  return [...porId.values()];
+}
+
+// -----------------------------------------------------------------------------
+// Leitura de HTML, para a pagina do plantel (essa continua a ser cartoes).
 // -----------------------------------------------------------------------------
 
 const POSICAO_POR_DADOS = {
@@ -40,7 +116,6 @@ export function detectarPosicao(texto = '') {
   return null;
 }
 
-// Os valores vem com &nbsp;: "€ 2.000.000 V.A." -> 2.0 (milhoes)
 export function paraMilhoes(texto = '') {
   const limpo = String(texto).replace(/\u00a0/g, ' ');
   const m = limpo.match(/€\s*([\d.\s]+)/);
@@ -49,45 +124,38 @@ export function paraMilhoes(texto = '') {
   return Number.isFinite(n) ? Number((n / 1_000_000).toFixed(3)) : 0;
 }
 
-// "24,85 %" -> 24.85
 export function paraPercentagem(texto = '') {
   const m = String(texto).replace(/\u00a0/g, ' ').match(/([\d,.]+)\s*%/);
   return m ? Number(m[1].replace(',', '.')) : null;
 }
 
-function texto($, el) {
-  return $(el).text().replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
-}
+const textoDe = ($, el) =>
+  $(el).text().replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
 
 export function lerCartao($, el) {
   const $c = $(el);
 
-  // 1. Id: do BuyPlayer, ou do id do article.
   const accao = $c.find('a[href*="BuyPlayer"]').attr('href') ?? '';
   const id =
     accao.match(/BuyPlayer\('(\d+)'\)/)?.[1] ??
     ($c.attr('id') ?? '').match(/(\d+)/)?.[1] ??
     null;
 
-  // 2. Posicao: do data-position, que e fiavel; texto so como recurso.
   const posicao =
     POSICAO_POR_DADOS[($c.attr('data-position') ?? '').toLowerCase()] ??
-    detectarPosicao(texto($, el));
+    detectarPosicao(textoDe($, el));
   if (!posicao) return null;
 
-  // 3. Valores: classes proprias, sem ambiguidade.
-  const custo = paraMilhoes(texto($, $c.find('.value-va')));
-  const valorInicial = paraMilhoes(texto($, $c.find('.value-vi'))) || custo;
+  const custo = paraMilhoes(textoDe($, $c.find('.value-va')));
+  const valorInicial = paraMilhoes(textoDe($, $c.find('.value-vi'))) || custo;
   if (!custo) return null;
 
-  // 4. Nome, clube, pontos e % vem da figure. O nome e a primeira linha.
   const $figura = $c.find('figure');
-  const bloco = texto($, $figura.length ? $figura : $c);
+  const bloco = textoDe($, $figura.length ? $figura : $c);
 
   const pontos = Number(bloco.match(/(-?\d+)\s*PTS/i)?.[1] ?? 0);
-  const percentagemEquipas = paraPercentagem(bloco);
-
   const rotulo = POSICAO_POR_TEXTO.find(([m]) => bloco.toLowerCase().includes(m))?.[0];
+
   let nome = '';
   let equipa = '';
 
@@ -99,7 +167,6 @@ export function lerCartao($, el) {
       .trim()
       .replace(/^redes/i, '')
       .split(/[\d€]/)[0]
-      // "Benfica -2 PTS" deixa um hifen agarrado ao nome do clube.
       .replace(/[-\u2013\s]+$/, '')
       .trim();
   } else {
@@ -118,35 +185,13 @@ export function lerCartao($, el) {
     valorizacao: Number((custo - valorInicial).toFixed(3)),
     pontosTotais: pontos,
     mediaPontos: pontos,
-    percentagemEquipas,
-    // Sem botao de compra = ja e teu.
+    percentagemEquipas: paraPercentagem(bloco),
     noPlantel: !accao,
   };
 }
 
 export function lerJogadores($) {
-  // Selector especifico primeiro. Se um dia mudarem as classes, cai no
-  // heuristico: qualquer bloco que tenha um valor em euros e uma posicao.
-  let elementos = $('article.player-card').toArray();
-
-  if (!elementos.length) {
-    elementos = $('*')
-      .filter((_, el) => {
-        const proprio = $(el).clone().children().remove().end().text();
-        return /V\.?A\.?/i.test(proprio) && /€/.test(proprio);
-      })
-      .map((_, el) => {
-        let $no = $(el);
-        for (let i = 0; i < 6; i++) {
-          const $pai = $no.parent();
-          if (!$pai.length) break;
-          $no = $pai;
-          if (detectarPosicao($no.text())) break;
-        }
-        return $no[0];
-      })
-      .toArray();
-  }
+  const elementos = $('article.player-card').toArray();
 
   const porId = new Map();
   for (const el of elementos) {

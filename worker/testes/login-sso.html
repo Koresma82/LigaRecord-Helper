@@ -1,0 +1,22 @@
+<div class="logo_marca"></div>
+<p class="sso_title">Inicie sessão</p>
+<div id="sso_layer_loginForm">
+  <form method="post" action="/Api/Layers/Login">
+    <input type="hidden" id="returnUrl" name="returnUrl" value="https://liga.record.pt/#">
+    <input type="hidden" id="appID" name="appID" value>
+    <input type="hidden" id="hdnIsLayer" name="hdnIsLayer" value>
+    <input type="hidden" id="hdnFacebookData" name="fbData" value>
+    <div class="sso_form">
+      <div class="sso_inputGroup">
+        <label for="inputEmail">Insira o seu email</label>
+        <input id="inputEmail" type="email" name="email" layer_registo_field_title="email">
+        <label for="inputPassword">Insira a sua palavra-passe</label>
+        <input id="inputPassword" type="password" name="password" layer_registo_field_title="password">
+        <button class="sso_submit" data-analytics-action="pick_login">Entrar</button>
+      </div>
+      <span class="layerv3_clientside_error erroAlert"></span>
+      <a href="https://aminhaconta.xl.pt/PasswordRecover" class="text_link">Recuperar password</a>
+    </div>
+  </form>
+</div>
+<h2 class="sso_subtitle">Não tem conta?</h2>

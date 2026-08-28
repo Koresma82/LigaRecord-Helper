@@ -9,10 +9,21 @@ const ROTULO = {
 // O Telegram corta mensagens acima de 4096 caracteres, por isso
 // mantemos isto curto de proposito. O detalhe esta na app.
 export function resumoJornada(boletim) {
+  // Quinta de manha: e este que te chega, com tudo o que precisas para ires
+  // editar no site.
   const fora = boletim.emRisco.filter((j) => j.ausencia?.tipo !== 'duvida' && j.ausencia);
   const duvida = boletim.emRisco.filter((j) => j.ausencia?.tipo === 'duvida' || j.hipoteses);
 
-  const linhas = [`*Jornada ${boletim.jornada?.numero ?? '?'}*`];
+  const linhas = [`*Ronda ${boletim.jornada?.numero ?? '?'}*`];
+
+  if (boletim.jornada?.fechoMercado) {
+    const horas = Math.round((new Date(boletim.jornada.fechoMercado) - Date.now()) / 36e5);
+    if (horas > 0) {
+      linhas.push(
+        horas >= 48 ? `Fecha daqui a ${Math.floor(horas / 24)} dias.` : `Fecha daqui a ${horas}h.`
+      );
+    }
+  }
 
   if (!fora.length && !duvida.length) {
     linhas.push('', 'Plantel inteiro disponível. Nada a fazer.');
@@ -50,15 +61,35 @@ export function resumoJornada(boletim) {
     }
   }
 
+  const meus = new Set((boletim.equipa?.plantel ?? []).map((j) => j.nome));
+
+  // Castigos que nao dao para confirmar. So aparecem se forem TEUS —
+  // encher a mensagem com duvidas sobre jogadores alheios nao ajuda.
+  const duvidosos = (boletim.castigosPorConfirmar ?? []).filter((c) => meus.has(c.nome));
+  if (duvidosos.length) {
+    linhas.push('', '*Confirma antes de trocar*');
+    for (const c of duvidosos) linhas.push(`• ${c.nome} — ${c.motivo}`);
+  }
+
+  // A um amarelo do castigo: aviso para a ronda seguinte, nao para esta.
+  const noLimite = (boletim.emRiscoDeCastigo ?? []).filter((c) => meus.has(c.nome));
+  if (noLimite.length) {
+    linhas.push(
+      '',
+      `⚠️ A um amarelo do castigo: ${noLimite.map((c) => c.nome).join(', ')}`
+    );
+  }
+
   if (boletim.avisos?.length) {
-    linhas.push('', '⚠️ ' + boletim.avisos.join(' '));
+    linhas.push('', boletim.avisos.map((a) => '⚠️ ' + a).join('\n'));
   }
 
   return linhas.join('\n');
 }
 
-export function alertaNovidade({ novidades, recuperados }) {
+export function alertaNovidade({ novidades, recuperados, tardio = false }) {
   const linhas = [];
+
   for (const j of novidades) {
     const motivo = j.ausencia ? ROTULO[j.ausencia.tipo] ?? 'indisponível' : 'a confirmar';
     linhas.push(`🔴 *${j.nome}* passou a ${motivo}.`);
@@ -66,6 +97,18 @@ export function alertaNovidade({ novidades, recuperados }) {
   for (const j of recuperados) {
     linhas.push(`🟢 *${j.nome}* saiu do boletim, já pode jogar.`);
   }
+
+  if (!linhas.length) return '';
+
+  if (tardio) {
+    linhas.unshift('*Mudou desde quinta*', '');
+    // Nao repetir "vai trocar" se ele ja gastou a troca da ronda.
+    linhas.push(
+      '',
+      'Se já usaste a troca desta ronda, resta mexer no onze e nos suplentes.'
+    );
+  }
+
   return linhas.join('\n');
 }
 
@@ -102,5 +145,85 @@ export function resumoPlantel(r) {
   }
 
   linhas.push('', '📌 = fixado por ti. Pontos são os da época, não previsão.');
+  return linhas.join('\n');
+}
+
+// -----------------------------------------------------------------------------
+// A mensagem de sexta de manha.
+//
+// E a unica que chega sempre, e tem uma unica funcao: dizer-te se precisas
+// de ir ao site mexer na equipa. Por isso comeca pela resposta a essa
+// pergunta, e so depois dá o contexto da liga.
+// -----------------------------------------------------------------------------
+
+export function resumoSemanal(boletim) {
+  const jornada = boletim.jornada?.numero;
+  const plantel = boletim.equipa?.plantel ?? [];
+
+  const meusFora = boletim.emRisco.filter(
+    (j) => j.ausencia && j.ausencia.tipo !== 'duvida'
+  );
+  const meusDuvida = boletim.emRisco.filter((j) => j.ausencia?.tipo === 'duvida');
+
+  const nomes = new Set(plantel.map((j) => j.nome));
+  const meusPertoDoCastigo = (boletim.emRiscoDeCastigo ?? []).filter((c) =>
+    nomes.has(c.nome)
+  );
+
+  const linhas = [`*Jornada ${jornada ?? '?'}*`];
+
+  // 1. A decisao, primeiro.
+  if (meusFora.length) {
+    linhas.push('', `⚠️ *Tens ${meusFora.length} jogador${meusFora.length > 1 ? 'es' : ''} de fora.*`);
+    linhas.push('Vai ao site actualizar a equipa antes do fecho.');
+    linhas.push('');
+    for (const j of meusFora) {
+      const motivo = j.ausencia.tipo === 'castigo' ? 'castigado' : 'lesionado';
+      const regresso = j.ausencia.dataRegresso
+        ? `, regresso ${j.ausencia.dataRegresso}`
+        : '';
+      linhas.push(`• *${j.nome}* (${j.equipa}) — ${motivo}${regresso}`);
+    }
+  } else {
+    linhas.push('', '✅ *Nenhum dos teus jogadores está de fora.*');
+  }
+
+  // 2. A troca sugerida, se houver alguem para trocar.
+  const troca = boletim.sugestoes?.melhorTroca;
+  if (meusFora.length && troca) {
+    linhas.push(
+      '',
+      '*Troca sugerida* (só tens uma)',
+      `${troca.sai.nome} → *${troca.entra.nome}* (${troca.entra.custo.toFixed(1)}M)`
+    );
+    if (boletim.sugestoes.ficamNoPlantel?.length) {
+      linhas.push(
+        `Ficam sem troca: ${boletim.sugestoes.ficamNoPlantel.map((j) => j.nome).join(', ')}.`
+      );
+    }
+  }
+
+  if (meusDuvida.length) {
+    linhas.push('', `❓ Em dúvida: ${meusDuvida.map((j) => j.nome).join(', ')}`);
+  }
+
+  if (meusPertoDoCastigo.length) {
+    linhas.push(
+      '',
+      `🟡 A um amarelo do castigo: ${meusPertoDoCastigo.map((c) => c.nome).join(', ')}`
+    );
+  }
+
+  // 3. O contexto da liga, no fim.
+  const naLiga = boletim.ligaInteira ?? [];
+  const lesionados = naLiga.filter((j) => j.ausencia?.tipo === 'lesao').length;
+  const castigados = naLiga.filter((j) => j.ausencia?.tipo === 'castigo').length;
+
+  linhas.push('', `_Na liga: ${lesionados} lesionados, ${castigados} castigados._`);
+
+  if (boletim.avisos?.length) {
+    linhas.push('', boletim.avisos.map((a) => '⚠️ ' + a).join('\n'));
+  }
+
   return linhas.join('\n');
 }

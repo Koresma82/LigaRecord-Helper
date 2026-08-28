@@ -38,7 +38,11 @@ export { FieldValue };
 // worker em dev de escrever por cima dos dados que estas a usar a serio.
 export const AMBIENTE = process.env.AMBIENTE ?? 'dev';
 
-const chave = () => (AMBIENTE === 'prod' ? UID() : `${UID()}_${AMBIENTE}`);
+// Exportada de proposito: qualquer coleccao com um documento por
+// utilizador tem de usar esta chave. O plantel foi criado sem ela e ficou a
+// ler de "uid" enquanto a app escrevia em "uid_dev" — gravava bem e o
+// worker nao via nada.
+export const chave = () => (AMBIENTE === 'prod' ? UID() : `${UID()}_${AMBIENTE}`);
 
 const UID = () => {
   const uid = process.env.UID_DONO;

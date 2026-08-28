@@ -1,4 +1,4 @@
-# Boletim da Jornada
+# LigaRecord Helper
 
 Abres a app antes do fecho do mercado e vês quais dos **teus** jogadores não
 jogam esta jornada e por quem os podes trocar sem estourar o saldo. O bot do
@@ -31,6 +31,34 @@ só existe no browser depois de fazeres login lá.
 Por isso o `LR_TOKEN` continua a ser capturado à mão (ver `CAPTURA.md`) e vive
 como variável de ambiente no Railway — nunca no browser, nunca no Firestore.
 
+## O login da Liga Record: porque é que desistimos dele
+
+Vale a pena registar isto, porque foi caro descobrir.
+
+O SSO do grupo Medialivre entrega a sessão aos sites por **iframe e
+postMessage entre domínios**. Está escrito no `SSOSiteVariables.js` deles:
+`SSORootIframe: "cofinasso-arbitration"`,
+`ThirPartySetSSOTokenCookie: "cof_tp_ssotoken"`. Nenhum cliente HTTP
+reproduz isso — exige JavaScript a correr e janelas a comunicar. O login em
+si funciona (as cookies do SSO aparecem), mas a entrega ao liga.record.pt
+nunca acontece.
+
+Podia resolver-se com um browser headless no Railway, mas seriam uns 400 MB
+de imagem e mais uma peça a partir-se.
+
+**E não é preciso.** A única coisa para que precisávamos do login era saber
+quais são os teus 23 jogadores. Todo o resto — mercado, valores, pontos,
+ronda, contador do fecho — vem do `playersearch.ashx` e das páginas públicas,
+sem sessão nenhuma.
+
+Como só tens **uma troca por ronda**, registar o plantel é um clique por
+semana. O separador Construir tem um botão "Gravar como o meu plantel": marcas
+os 23, gravas, e o worker passa a segui-los. Os valores e os pontos continuam
+a actualizar-se sozinhos, porque são lidos do mercado a cada recolha.
+
+A colecção `plantel` é a única que o browser pode escrever, e as regras
+limitam-na à lista de ids e ao saldo, no documento do próprio.
+
 ## O que a captura revelou
 
 Três coisas que mudaram o projeto:
@@ -40,17 +68,116 @@ Três coisas que mudaram o projeto:
 Os dados vêm renderizados no HTML. Tudo o que estava escrito à volta de
 `/api/players` foi deitado fora e substituído por scraping com cheerio.
 
+## Fonte de lesões: Transfermarkt
+
+O Zerozero não serviu. As 18 páginas de equipa carregavam sem erro e
+devolviam **zero ausências em todas** — não é que os selectores estivessem
+mal afinados, é que aquelas páginas não listam lesionados de todo. Toda essa
+abordagem foi construída em cima de um palpite meu que nunca verifiquei.
+
+A substituta é melhor em tudo:
+
+```
+https://www.transfermarkt.pt/liga-portugal/verletztespieler/wettbewerb/PO1
+```
+
+Uma tabela com a liga inteira: jogador, posição, clube, tipo de lesão, data
+prevista de regresso e valor de mercado. Um pedido em vez de dezoito, e a
+data de regresso é informação que o Zerozero nunca teve.
+
+## Castigos: calculados, não copiados
+
+Segunda fonte, para o que o Transfermarkt não cobre:
+
+```
+https://maisfutebol.iol.pt/liga/disciplina
+```
+
+Traz os cartões acumulados de cada jogador. A regra está confirmada no
+artigo 164.º do regulamento disciplinar da Liga: **uma série de cinco amarelos
+dá um jogo de suspensão**. Amarelos da Taça, Supertaça e Taça da Liga não
+contam, e a contagem não transita de época.
+
+**A armadilha, e porque é que ler a página não chega.** Aquela tabela mostra
+totais acumulados, não quem está castigado. Um jogador com 5 amarelos pode
+ter cumprido o castigo na jornada passada e estar disponível agora. Ler
+`amarelos % 5 === 0` como "castigado" produz falsos positivos — e um falso
+positivo aqui faz-te gastar a única troca da ronda a tirar um jogador que
+podia jogar.
+
+A app guarda os cartões de cada recolha e compara. O que interessa é quem
+**atravessou** um múltiplo de cinco desde a última vez, não quem lá está
+parado. Na primeira recolha não há com que comparar, e nesse caso os castigos
+vêm marcados com certeza baixa e o aviso de que podem já ter sido cumpridos.
+
+Também assinala quem está **a um amarelo do castigo** — não é ausência, é
+aviso: se comprares esse jogador hoje, é bem possível que falhe a ronda
+seguinte.
+
+**Vermelhos** dão suspensão certa, mas a duração é decidida pelo Conselho de
+Disciplina e não se calcula. A app marca como "pelo menos um jogo, duração
+por decidir".
+
+**O endpoint de pesquisa.** A página do plantel só mostra as primeiras filas;
+o resto vem por AJAX de:
+
+```
+GET liga.record.pt/common/services/playersearch.ashx
+      ?playerposition=GR|DF|MD|AV (ou vazio)
+      &name=&club=<nome em minúsculas>
+      &minval=500000&maxval=12000000
+      &order_by=points&order_dir=desc
+```
+
+Devolve **JSON**, não HTML:
+
+```json
+{"Id":42896,"IdPlayer":42896,"Name":"Pavlidis","NameClub":"Benfica",
+ "PlayerPosition":"AV","InitialValue":6000000,"CurrentValue":6000000,
+ "Points":0,"PercentTeams":"55,45","InTeam":true}
+```
+
+Com a posição vazia e o clube definido vem o plantel inteiro desse clube —
+18 pedidos cobrem a liga toda. Valores em euros, `PercentTeams` com vírgula
+decimal, posições `GR`/`DF`/`MD`/`AV`.
+
+Isto tornou o parser de HTML desnecessário para o mercado: nada de selectores
+para partir e os ids são os verdadeiros. O parser de cartões ficou só para a
+página do plantel, e como recurso caso mudem o formato.
+
+**`InTeam` não significa "está na minha equipa".** Vinha `true` para todos os
+jogadores do Benfica com o plantel vazio. Quem determina o plantel é a página
+`plantel.aspx`, pela ausência do botão COMPRAR.
+
+**A cadeia de login, tal como é.** Foi preciso descobri-la a passo:
+
+```
+POST aminhaconta.xl.pt/Api/Layers/Login      (email + password)
+  → {"errors":false,"RedirectUrl":"…/Redirects/INIT_SESSION?si=…"}
+GET  aminhaconta.xl.pt/Redirects/INIT_SESSION?si=…
+  → encaminha para liga.record.pt/user_login.ashx?token=…
+GET  liga.record.pt/user_login.ashx?token=…
+  → Set-Cookie: LigaRecordUser, cof_site_user
+```
+
+O salto do meio pode ser um 302, um meta refresh ou JavaScript — o worker
+trata dos três, porque não há forma de saber sem tentar.
+
 **2. A sessão é por cookie, não por token.** O login passa por
 `user_login.ashx?token=…` que devolve dois cookies, `LigaRecordUser` e
 `cof_site_user`. O segundo expirava em menos de doze horas. Ou seja: a captura
 manual que eu propus antes era inviável — terias de a fazer todos os dias.
 
-**3. O login é email + palavra-passe no domínio deles.** O botão do Google
-existe mas é alternativa, não obrigação. Isto muda a minha recomendação
-anterior: aqui o login automático é seguro de fazer, porque não passa pelo
-OAuth do Google e não põe a tua conta Google em risco. O worker autentica-se
-sozinho com `LR_EMAIL` e `LR_PASSWORD`, incluindo os campos `__VIEWSTATE` e
-`__EVENTVALIDATION` que o WebForms exige.
+**3. O login é email + palavra-passe, e não é WebForms.** É o SSO do grupo
+Medialivre, servido como overlay: um `<form action="/Api/Layers/Login">` com
+campos `email`, `password` e três escondidos (`returnUrl`, `appID`,
+`hdnIsLayer`, `fbData`). Sem `__VIEWSTATE`, sem `__EVENTVALIDATION` — as
+páginas do jogo são WebForms, o login não é. Presumi mal e a primeira versão
+enviava campos que não existem.
+
+O botão do Google existe mas é alternativa, não obrigação. Isto muda a minha
+recomendação anterior: aqui o login automático é seguro de fazer, porque não
+passa pelo OAuth do Google e não põe a tua conta Google em risco.
 
 ## Construtor de plantel
 
@@ -158,10 +285,33 @@ actualização em tempo real de borla — o boletim muda no telemóvel sem refre
 para todos. O browser nunca escreve. Se o token da Liga Record vazasse a
 partir do cliente estava tudo perdido, por isso ele nunca lá chega.
 
-**O bot só avisa quando muda alguma coisa.** Durante a semana compara com o
-boletim anterior e só manda mensagem se alguém entrou ou saiu do boletim. Um
-alerta diário a dizer o mesmo deixa de ser lido ao fim de duas semanas. Sábado
-de manhã manda o resumo completo antes do fecho.
+**O calendário do bot.**
+
+| Quando | O quê |
+|---|---|
+| Todos os dias 07:00 | Recolha **leve**: só lesões e cartões. Silenciosa, salvo se alguém do teu plantel mudar de estado. |
+| Quarta 08:00 | Recolha **completa**: mercado, valores, classificação, jogos, golos. |
+| **Sexta 08:00** | **A mensagem.** Quem está de fora, quais são teus, e o aviso para ires actualizar. |
+
+A diária é leve de propósito. Varrer 538 jogadores todos os dias para
+descobrir que ninguém se lesionou é desperdício, e mais uma oportunidade de
+sermos barrados. A completa corre à quarta porque é quando os valores da
+Liga Record mudam.
+
+A mensagem de sexta começa pela decisão — tens ou não tens jogadores de fora
+— e só depois dá o contexto da liga. Se não tiveres nenhum, diz-te isso numa
+linha e acabou.
+
+Comandos: `/boletim` estado actual · `/semana` recolhe e manda o resumo ·
+`/lesoes` lesionados da liga · `/actualizar` recolha completa ·
+`/montar` sugere plantel · `/saldo`.
+
+**Uma nota estratégica que não é sobre código.** Só tens uma troca por ronda,
+e as notícias de última hora saem nas conferências de sexta e sábado. Editares
+à quinta significa gastar a troca antes de saberes tudo. Os alertas tardios
+dizem-te o que mudou, mas se já usaste a troca só te resta mexer no onze e nos
+suplentes. É uma escolha tua entre decidir cedo e decidir informado — a app
+apoia as duas.
 
 **Aborta em vez de escrever vazio.** Se o Zerozero mudar o HTML, o parser
 devolve zero ausências — que na app parece "ninguém está lesionado". É a falha

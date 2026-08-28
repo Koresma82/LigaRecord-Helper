@@ -10,9 +10,11 @@
 export const BASE = process.env.LR_BASE ?? 'https://liga.record.pt';
 
 export const URLS = {
-  // Formulario de login. E o SSO do grupo Medialivre; a pagina que
-  // apanhaste na captura. Confirma o URL exacto na barra de endereco.
-  login: process.env.LR_URL_LOGIN ?? 'https://liga.record.pt/login/default.aspx',
+  // O formulario de login NAO esta aqui de proposito. E o SSO do grupo
+  // Medialivre, noutro dominio, e adivinhar o caminho deu 404. O worker
+  // descobre-o sozinho: pede uma pagina protegida sem sessao e segue o
+  // redireccionamento ate onde o servidor o mandar.
+  // Se quiseres fixar um URL, poe LR_URL_LOGIN no .env.
 
   // Painel principal, confirmado na captura.
   gerirEquipas: `${BASE}/gerir-equipas/default.aspx`,

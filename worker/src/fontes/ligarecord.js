@@ -1,7 +1,6 @@
 import * as cheerio from 'cheerio';
 import { pedido, ErroSessao } from '../lib-http.js';
-import { URLS, REGRAS } from '../config/endpoints.js';
-import { obterSessao, invalidar } from './sessao.js';
+import { URLS } from '../config/endpoints.js';
 import { lerJogadores, paraMilhoes } from './analisar.js';
 import { todosOsJogadores } from './pesquisa.js';
 
@@ -10,14 +9,8 @@ import { todosOsJogadores } from './pesquisa.js';
 // nao tens. A leitura dos cartoes esta em analisar.js.
 
 async function abrir(url) {
-  const frasco = await obterSessao();
-  let r = await pedido(url, { frasco, seguir: 4 });
-
-  if (r.status === 200 && /inicie sess/i.test(r.texto.slice(0, 5000))) {
-    invalidar();
-    const novo = await obterSessao({ forcar: true });
-    r = await pedido(url, { frasco: novo, seguir: 4 });
-  }
+  // Sem sessao. A ronda e o contador do fecho estao na pagina publica.
+  let r = await pedido(url, { seguir: 4 });
 
   if (r.status >= 400) throw new ErroSessao(`HTTP ${r.status} em ${url}`, r.status);
   return cheerio.load(r.texto);
@@ -62,36 +55,46 @@ export async function obterTodosJogadores({ log = () => {} } = {}) {
   return jogadores;
 }
 
-export async function obterMinhaEquipa() {
-  const { jogadores, saldo } = await lerPagina(urlPlantel());
-  const meus = jogadores.filter((j) => j.noPlantel);
-  const valorEquipa = meus.reduce((s, j) => s + j.custo, 0);
+// obterMinhaEquipa() foi removida. O plantel deixou de ser lido do site:
+// o SSO da Liga Record entrega a sessao por iframe entre dominios, o que um
+// cliente HTTP nao reproduz. Passou a vir do que registas na app — ver
+// fontes/plantel-manual.js.
 
-  return {
-    jogadores: meus,
-    saldo: saldo || Number((REGRAS.orcamentoTotal - valorEquipa).toFixed(2)),
-    valorEquipa: Number(valorEquipa.toFixed(2)),
-    completo: meus.length === REGRAS.tamanhoPlantel,
-    faltam: REGRAS.tamanhoPlantel - meus.length,
-  };
-}
+// -----------------------------------------------------------------------------
+// A jornada.
+//
+// Ha duas contagens diferentes e e facil confundi-las:
+//   - a JORNADA da Primeira Liga (a que interessa para lesoes e castigos)
+//   - a RONDA da Liga Record, que so comeca na 6.a jornada
+//
+// Lemos a ronda da Liga Record da pagina publica, e a jornada da Primeira
+// Liga conta-se pelos jogos ja realizados. LR_JORNADA no .env sobrepoe-se
+// a tudo, para quando as fontes discordarem.
+// -----------------------------------------------------------------------------
 
 export async function obterJornada() {
+  const manual = Number(process.env.LR_JORNADA);
+  if (Number.isFinite(manual) && manual > 0) {
+    return { numero: manual, fechoMercado: null, origem: 'manual' };
+  }
+
   try {
     const $ = await abrir(URLS.gerirEquipas);
     const texto = $('body').text().replace(/\s+/g, ' ');
-    const numero = Number(texto.match(/ronda\s*(\d+)/i)?.[1]) || null;
 
-    // O contador "01 : 04 : 06 : 20" e dias:horas:minutos:segundos.
+    const ronda = Number(texto.match(/ronda\s*(\d+)/i)?.[1]) || null;
+
+    // "01 : 04 : 06 : 20" = dias : horas : minutos : segundos
     const c = texto.match(/(\d{1,2})\s*:\s*(\d{2})\s*:\s*(\d{2})\s*:\s*(\d{2})/);
     const fechoMercado = c
       ? new Date(
-          Date.now() + ((Number(c[1]) * 24 + Number(c[2])) * 3600 + Number(c[3]) * 60 + Number(c[4])) * 1000
+          Date.now() +
+            ((Number(c[1]) * 24 + Number(c[2])) * 3600 + Number(c[3]) * 60 + Number(c[4])) * 1000
         ).toISOString()
       : null;
 
-    return { numero, fechoMercado };
+    return { numero: ronda, fechoMercado, origem: ronda ? 'liga-record' : 'desconhecida' };
   } catch {
-    return { numero: null, fechoMercado: null };
+    return { numero: null, fechoMercado: null, origem: 'erro' };
   }
 }

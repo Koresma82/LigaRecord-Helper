@@ -24,6 +24,20 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // O plantel e a UNICA coleccao que o browser pode escrever. E preciso
+    // porque o worker deixou de conseguir le-lo do site (o SSO da Liga
+    // Record usa iframes, que um cliente HTTP nao reproduz).
+    //
+    // A validacao e apertada de proposito: so a lista de ids e o saldo, e
+    // so no documento do proprio.
+    match /plantel/{documento} {
+      allow read: if meu(documento);
+      allow write: if meu(documento)
+                   && request.resource.data.keys().hasOnly(['ids', 'saldo', 'actualizadoEm'])
+                   && request.resource.data.ids is list
+                   && request.resource.data.ids.size() <= 30;
+    }
+
     // Tokens da Liga Record. O browser NUNCA lhe toca — nem para ler.
     // So a conta de servico do worker, que ignora estas regras.
     match /segredos/{uid} {

@@ -97,23 +97,31 @@ export function semelhanca(nomeA, nomeB) {
 const ALCUNHAS_EQUIPAS = {
   // A chave e o nome como aparece na Liga Record; os valores sao as
   // variantes que o Zerozero e a imprensa usam.
+  // Grafias do Transfermarkt incluidas: eles usam "Sporting CP",
+  // "Vitoria Guimaraes", "SC Braga", "CF Estrela Amadora".
   'sporting': ['sporting cp', 'scp', 'sporting clube de portugal', 'leoes'],
   'fc porto': ['porto', 'fcp', 'dragoes', 'futebol clube do porto'],
   'benfica': ['sl benfica', 'slb', 'aguias', 'sport lisboa e benfica'],
   'sp. braga': ['braga', 'sc braga', 'scb', 'sporting clube de braga'],
-  'v. guimaraes': ['vitoria sc', 'vitoria guimaraes', 'vsc', 'guimaraes', 'vitoria'],
-  'e. amadora': ['estrela da amadora', 'estrela', 'cf estrela da amadora'],
-  'academico viseu': ['academico de viseu', 'av', 'academico viseu fc'],
-  'maritimo': ['cs maritimo', 'maritimo da madeira'],
-  'alverca': ['fc alverca'],
+  'v. guimaraes': ['vitoria sc', 'vitoria guimaraes', 'vsc', 'guimaraes', 'vitoria',
+                   'vitoria sc guimaraes'],
+  'e. amadora': ['estrela da amadora', 'estrela', 'cf estrela da amadora',
+                 'cf estrela amadora', 'est. amadora', 'est amadora'],
+  // O zerozero escreve so "Académico"; a Liga Record escreve "Ac. Viseu";
+  // o Transfermarkt "Académico de Viseu". Sem a forma curta, a equipa nao
+  // era reconhecida e o jogo saia com a casa e o fora trocados.
+  'academico viseu': ['academico de viseu', 'academico viseu fc',
+                      'academico viseu', 'ac. viseu', 'ac viseu', 'academico'],
+  'maritimo': ['cs maritimo', 'maritimo da madeira', 'maritimo funchal'],
+  'alverca': ['fc alverca', 'alverca fc'],
   'casa pia': ['casa pia ac', 'casapia'],
   'rio ave': ['rio ave fc'],
   'gil vicente': ['gil vicente fc', 'gil'],
   'santa clara': ['cd santa clara'],
-  'famalicao': ['fc famalicao'],
+  'famalicao': ['fc famalicao', 'famalicao fc'],
   'moreirense': ['moreirense fc'],
-  'arouca': ['fc arouca'],
-  'estoril': ['estoril praia', 'gd estoril praia'],
+  'arouca': ['fc arouca', 'arouca fc'],
+  'estoril': ['estoril praia', 'gd estoril praia', 'estoril praia sad'],
   'nacional': ['cd nacional', 'nacional da madeira'],
 };
 
@@ -125,7 +133,24 @@ for (const [canonico, alcunhas] of Object.entries(ALCUNHAS_EQUIPAS)) {
   for (const a of alcunhas) INDICE.set(normalizar(a), canonico);
 }
 
-export function equipaCanonica(nome = '') {
+// Todas as equipas cujo nome ou alcunha aparece dentro do texto.
+//
+// Serve para rejeitar fragmentos que atravessam duas equipas. Tem de olhar
+// para as ALCUNHAS e nao so para os nomes canonicos: "gil" e alcunha do Gil
+// Vicente, e "Famalicao Gil" contem uma equipa e meia sem que o nome
+// canonico "gil vicente" la esteja.
+export function equipasContidas(texto = '') {
+  const n = normalizar(texto);
+  if (!n) return [];
+
+  const encontradas = new Set();
+  for (const [chave, canonico] of INDICE) {
+    if (chave.length >= 3 && n.includes(chave)) encontradas.add(canonico);
+  }
+  return [...encontradas];
+}
+
+export function equipaCanonica(nome = '', { estrito = false } = {}) {
   const n = normalizar(nome);
   if (!n) return '';
 
@@ -133,8 +158,14 @@ export function equipaCanonica(nome = '') {
   if (exacto) return exacto;
 
   // Correspondencia parcial, para nomes com sufixos ("FC Porto SAD").
-  for (const [chave, canonico] of INDICE) {
-    if (n.includes(chave) || chave.includes(n)) return canonico;
+  //
+  // So a partir de cinco caracteres. Abaixo disso da falsos positivos
+  // absurdos: "AC" de "Casa Pia AC" casava com "academico viseu" porque
+  // esta la dentro, e o jogo passava a ter tres equipas.
+  if (!estrito && n.length >= 5) {
+    for (const [chave, canonico] of INDICE) {
+      if (n.includes(chave) || chave.includes(n)) return canonico;
+    }
   }
 
   return n;

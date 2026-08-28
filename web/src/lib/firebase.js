@@ -6,7 +6,7 @@ import {
   signOut as sair,
   onAuthStateChanged,
 } from 'firebase/auth';
-import { getFirestore, doc, onSnapshot } from 'firebase/firestore';
+import { getFirestore, doc, onSnapshot, setDoc, getDoc } from 'firebase/firestore';
 
 // Estas chaves sao publicas por desenho — quem protege os dados sao as
 // regras do Firestore (ver firestore.rules), nao o segredo da config.
@@ -32,6 +32,21 @@ export { sair, onAuthStateChanged };
 export const AMBIENTE = import.meta.env.VITE_AMBIENTE ?? 'dev';
 
 const documento = (uid) => (AMBIENTE === 'prod' ? uid : `${uid}_${AMBIENTE}`);
+
+// O plantel e a unica coisa que a app escreve. O worker le-o na recolha
+// seguinte e passa a saber quais sao os teus jogadores.
+export async function guardarPlantel(uid, ids, saldo = 0) {
+  await setDoc(
+    doc(db, 'plantel', documento(uid)),
+    { ids: ids.map(String), saldo, actualizadoEm: new Date().toISOString() },
+    { merge: true }
+  );
+}
+
+export async function lerPlantel(uid) {
+  const d = await getDoc(doc(db, 'plantel', documento(uid)));
+  return d.exists() ? d.data() : null;
+}
 
 // Escuta o boletim em tempo real. Quando o worker gravar uma versao nova,
 // a app actualiza-se sozinha sem refresh.
