@@ -40,7 +40,15 @@ export function criarIndice(registos) {
   for (const r of registos) {
     const chave = equipaCanonica(r.equipa);
     if (!porEquipa.has(chave)) porEquipa.set(chave, []);
-    porEquipa.get(chave).push({ ...r, __fichas: fichasDistintivas(r.nome) });
+    // O nome completo, quando existe, entra na lista de fichas: a API da
+    // Liga Portugal da "Pavlidis" e "Evangelos Pavlidis", e um plantel pode
+    // usar qualquer um dos dois.
+    porEquipa.get(chave).push({
+      ...r,
+      __fichas: [
+        ...new Set([...fichasDistintivas(r.nome), ...fichasDistintivas(r.nomeCompleto ?? '')]),
+      ],
+    });
   }
 
   return porEquipa;
@@ -52,8 +60,10 @@ export function procurar(indice, nome, equipa) {
 
   const alvo = normalizar(nome);
 
-  // 1. Igualdade depois de normalizar.
-  const exacto = candidatos.find((c) => normalizar(c.nome) === alvo);
+  // 1. Igualdade depois de normalizar, no nome curto ou no completo.
+  const exacto = candidatos.find(
+    (c) => normalizar(c.nome) === alvo || normalizar(c.nomeCompleto ?? '') === alvo
+  );
   if (exacto) return exacto;
 
   // 2. Apelido distintivo partilhado, e so um candidato o tem.
@@ -69,7 +79,10 @@ export function procurar(indice, nome, equipa) {
   let melhor = null;
   let melhorPontos = 0;
   for (const c of candidatos) {
-    const pontos = semelhanca(nome, c.nome);
+    const pontos = Math.max(
+      semelhanca(nome, c.nome),
+      c.nomeCompleto ? semelhanca(nome, c.nomeCompleto) : 0
+    );
     if (pontos > melhorPontos) {
       melhor = c;
       melhorPontos = pontos;

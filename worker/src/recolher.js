@@ -11,11 +11,19 @@ import {
   jogosDeVariasJornadas as jogosMaisFutebol,
 } from './fontes/maisfutebol.js';
 import {
-  marcadoresDaLiga,
-  disciplinaDaLiga,
+  marcadoresDaLiga as marcadoresZeroZero,
+  disciplinaDaLiga as disciplinaZeroZero,
   jogosDeVariasJornadas,
   classificacaoDaLiga,
 } from './fontes/zerozero.js';
+// A API oficial da Liga Portugal e a primeira escolha: e JSON, e da fonte
+// autoritativa, e traz assistencias que nenhuma das outras dava.
+import {
+  disciplinaDaLiga as disciplinaOficial,
+  marcadoresDaLiga as marcadoresOficial,
+  classificacaoDaLiga as classificacaoOficial,
+  jogosDeVariasJornadas as jogosOficial,
+} from './fontes/ligaportugal.js';
 import { lerPlantelGuardado, montarEquipa } from './fontes/plantel-manual.js';
 import { jornadaActual } from './fontes/jornada.js';
 import { emparelhar } from './emparelhar.js';
@@ -91,10 +99,18 @@ async function comAlternativa(nome, principal, alternativa, { log = () => {} } =
 }
 
 async function lerDisciplina({ log = () => {} } = {}) {
+  // Tres fontes por ordem de preferencia. A oficial e JSON e cruza amarelos
+  // com vermelhos por playerId, sem depender de nomes.
   const linhas = await comAlternativa(
     'Disciplina',
-    () => disciplinaDaLiga({ log }),
-    () => disciplinaMaisFutebol({ log }),
+    () => disciplinaOficial({ log }),
+    () =>
+      comAlternativa(
+        'Disciplina (2.a alternativa)',
+        () => disciplinaZeroZero({ log }),
+        () => disciplinaMaisFutebol({ log }),
+        { log }
+      ),
     { log }
   );
   // Aqui o [] silencioso e perigoso: zero cartoes lidos passaria por "ninguem
@@ -204,6 +220,9 @@ export async function recolherLeve({ log = console.log, duvidasIA: forcarDuvidas
         return {
           ...j,
           golos: marcador?.golos ?? anteriorDoPlantel?.golos ?? 0,
+          // A recolha leve nao vai buscar golos nem assistencias; herda-os
+          // da ultima completa, que corre a quarta.
+          assistencias: anteriorDoPlantel?.assistencias ?? 0,
           // Quem bate os penaltis da equipa tem pontos quase garantidos de
           // cada vez que a equipa ganha um. So o maisfutebol da esta coluna.
           penaltis: marcador?.penaltis ?? anteriorDoPlantel?.penaltis ?? 0,
@@ -480,16 +499,49 @@ export async function recolher({ log = console.log, anterior = null } = {}) {
 
   const [tabela, listaJogos, golos] = await Promise.all([
     // A classificacao vem da mesma pagina dos jogos, lida pelo cabecalho.
-    comAlternativa('Classificacao', () => classificacaoDaLiga({ log }), () => classificacaoMaisFutebol({ log }), { log }),
-    // A jornada e um parametro do URL: pedimos a actual e a seguinte, cada
-    // uma no seu pedido, para poderem ser mostradas separadas.
+    // A classificacao da API oficial e pedida para a jornada JA DISPUTADA:
+    // a tabela da jornada 5 e a que reflecte os 5 jogos jogados.
     comAlternativa(
-      'Jogos',
-      () => jogosDeVariasJornadas([jornada.numero, jornada.numero + 1], { log }),
-      () => jogosMaisFutebol([jornada.numero, jornada.numero + 1], { log }),
+      'Classificacao',
+      () => classificacaoOficial({ log, jornada: jornada.numero }),
+      () =>
+        comAlternativa(
+          'Classificacao (2.a alternativa)',
+          () => classificacaoDaLiga({ log }),
+          () => classificacaoMaisFutebol({ log }),
+          { log }
+        ),
       { log }
     ),
-    comAlternativa('Golos', () => marcadoresDaLiga({ log }), () => marcadoresMaisFutebol({ log }), { log }),
+    // A jornada e um parametro do URL: pedimos a actual e a seguinte, cada
+    // uma no seu pedido, para poderem ser mostradas separadas.
+    // NOTA sobre que jornadas pedir: a classificacao da jornada 5 significa
+    // "5 jogos disputados", portanto os jogos POR JOGAR sao os da 6 e da 7.
+    // Pedir a jornada 5 aqui traria jogos ja realizados.
+    comAlternativa(
+      'Jogos',
+      () => jogosOficial([jornada.numero + 1, jornada.numero + 2], { log }),
+      () =>
+        comAlternativa(
+          'Jogos (2.a alternativa)',
+          () => jogosDeVariasJornadas([jornada.numero + 1, jornada.numero + 2], { log }),
+          () => jogosMaisFutebol([jornada.numero + 1, jornada.numero + 2], { log }),
+          { log }
+        ),
+      { log }
+    ),
+    comAlternativa(
+      'Golos e assistencias',
+      () => marcadoresOficial({ log }),
+      () =>
+        comAlternativa(
+          'Golos (2.a alternativa)',
+          () => marcadoresZeroZero({ log }),
+          () => marcadoresMaisFutebol({ log }),
+          { log }
+        ),
+      { log }
+    ),
   ]);
 
   const proximosJogos = { dados: listaJogos };
@@ -499,8 +551,9 @@ export async function recolher({ log = console.log, anterior = null } = {}) {
   const indiceGolos = criarIndice(golos);
 
   const adversarios = new Map();
-  // O proximo adversario e o da jornada ACTUAL, nao o da seguinte.
-  for (const j of listaJogos.filter((x) => x.jornada === jornada.numero)) {
+  // O proximo adversario e o da primeira jornada POR JOGAR.
+  const proximaJornada = jornada.numero + 1;
+  for (const j of listaJogos.filter((x) => Number(x.jornada) === proximaJornada)) {
     const base = { data: j.data, hora: j.hora, jornada: j.jornada };
     adversarios.set(equipaCanonica(j.casa), { ...base, adversario: j.fora, casa: true });
     adversarios.set(equipaCanonica(j.fora), { ...base, adversario: j.casa, casa: false });
@@ -550,6 +603,7 @@ export async function recolher({ log = console.log, anterior = null } = {}) {
         return {
           ...limpar(j),
           golos: marcador?.golos ?? 0,
+          assistencias: marcador?.assistencias ?? 0,
           amarelos,
           vermelhos: disciplina?.vermelhos ?? 0,
           proximoJogo: adversarios.get(equipaCanonica(j.equipa)) ?? null,

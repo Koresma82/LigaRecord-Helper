@@ -816,3 +816,27 @@ html, body {
     min-width: 18px;
   }
 }
+
+/* A forma recente: o jogo mais recente é o da direita. */
+.tabela .forma {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.resultado {
+  display: inline-block;
+  width: 15px;
+  height: 15px;
+  line-height: 15px;
+  text-align: center;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  margin-left: 2px;
+  color: var(--fundo);
+}
+
+.resultado--V { background: var(--ok); }
+.resultado--E { background: var(--gr); }
+.resultado--D { background: var(--fora); color: #fff; }
+.resultado--N { background: var(--linha); color: var(--apagado); }

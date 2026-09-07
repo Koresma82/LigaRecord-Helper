@@ -1,3 +1,5 @@
+import { blocoAnalise } from '../analise.js';
+
 const euros = (v) => `${Number(v ?? 0).toFixed(1)}M`;
 
 const ROTULO = {
@@ -231,6 +233,12 @@ export function resumoSemanal(boletim) {
       if (d.fonte) linhas.push(`  ${d.fonte}`);
     }
   }
+
+  // 4. A analise da jornada: adversarios, quem nao tem jogo, quem esta a um
+  //    amarelo. Fica antes do lembrete final porque e o que te faz mexer no
+  //    onze — o lembrete e so o empurrao para ires ao site.
+  const analise = blocoAnalise(boletim);
+  if (analise) linhas.push(analise);
 
   linhas.push('', `_Na liga: ${lesionados} lesionados, ${castigados} castigados._`);
 

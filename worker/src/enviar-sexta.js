@@ -10,7 +10,12 @@ import { enviarResumoSemanal } from './tarefas.js';
 // Imprime a mensagem que enviou, para se poder rever o texto sem ter de ir
 // ao Telegram.
 
-const r = await enviarResumoSemanal({ log: console.log });
+// `npm run sexta` faz a chamada paga, como a sexta a serio.
+// `npm run sexta -- sem-ia` corre tudo menos essa, para testar de graca.
+const comIA = !process.argv.includes('sem-ia');
+if (!comIA) console.log('(sem a analise de noticias por IA)\n');
+
+const r = await enviarResumoSemanal({ log: console.log, comIA });
 
 if (r.ok) {
   console.log('\n===== MENSAGEM ENVIADA =====\n');

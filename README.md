@@ -285,13 +285,72 @@ actualização em tempo real de borla — o boletim muda no telemóvel sem refre
 para todos. O browser nunca escreve. Se o token da Liga Record vazasse a
 partir do cliente estava tudo perdido, por isso ele nunca lá chega.
 
+## Fonte principal: a API oficial da Liga Portugal
+
+```
+GET ligaportugal.pt/api/v2/competition/top/players
+      ?competition=ligaportugalbetclic&season=20262027&size=400&statId=NNN
+```
+
+| statId | Estatística |
+|---|---|
+| 142 | Golos |
+| 3 | Assistências |
+| 10139 | Cartões amarelos |
+| 50 | Cartões vermelhos |
+
+JSON, da fonte autoritativa, com o `playerId` a permitir cruzar amarelos com
+vermelhos sem depender de nomes. Substituiu o raspar de HTML do maisfutebol e
+do zerozero, que ficam como alternativas se a API falhar.
+
+Duas coisas que só esta fonte dá: **assistências** (nenhuma das outras tinha)
+e o **nome completo** a par do curto, o que torna o emparelhamento com o
+plantel bastante mais fiável.
+
+O `size` é o parâmetro a vigiar: a página do site pede 20, que é o top que
+mostra. Nós pedimos 400, porque um jogador com 4 amarelos pode estar em 60.º
+lugar e ser exactamente o que interessa avisar. Se a API impuser um limite
+menor, o `npm run inspect-lp` mostra-o.
+
+**A época muda todos os anos** — `LP_EPOCA=20262027` no `.env`.
+
+## Análise da jornada
+
+Além de quem está de fora, a mensagem traz o que ajuda a montar o onze:
+
+| Bloco | Porquê |
+|---|---|
+| Jogos difíceis | Jogadores teus contra Benfica, Sporting, FC Porto ou Sp. Braga |
+| Sem jogo | Somam zero garantido — o erro mais caro e mais fácil de evitar |
+| Jogos favoráveis | Adversário com ataque fraco (para GR/DEF) ou defesa fraca (para MED/AVA) |
+| Casa / fora | Contagem simples |
+
+Tudo sai de dados que o boletim já tem: **zero pedidos novos**.
+
+Os quatro grandes são identificados por palavra distintiva — "benfica",
+"sporting", "porto", "braga" — e não pelo nome completo, porque cada fonte
+escreve o prefixo à sua maneira ("SC Braga", "Sp. Braga", "Braga").
+
+**Isto são heurísticas, não previsões.** "Joga contra o Benfica" reduz a
+probabilidade de pontos ofensivos, não a elimina — e um jogador do Benfica
+contra o último classificado é o caso espelhado, que o código também apanha.
+Os "jogos favoráveis" usam golos por jogo, e com quatro jornadas disputadas
+é amostra pequena: uma goleada distorce a média. A partir da jornada 10 vale
+bastante mais.
+
 **O calendário do bot.**
 
 | Quando | O quê |
 |---|---|
 | Todos os dias 07:00 | Recolha **leve**: só lesões e cartões. Silenciosa, salvo se alguém do teu plantel mudar de estado. |
 | Quarta 08:00 | Recolha **completa**: mercado, valores, classificação, jogos, golos. |
-| **Sexta 08:00** | **A mensagem.** Quem está de fora, quais são teus, e o aviso para ires actualizar. |
+| Quarta 08:30 | Análise da jornada, depois da recolha completa. |
+| Quinta 08:00 | Análise, já com o mapa de castigos. |
+| **Sexta 08:00** | **A última antes do fecho**, e a única com a análise de notícias por IA. |
+
+A chamada paga à IA corre **só à sexta**. Correr três vezes por semana
+triplicava o custo para acrescentar pouco: as notícias de quarta ainda são as
+de terça.
 
 A diária é leve de propósito. Varrer 538 jogadores todos os dias para
 descobrir que ninguém se lesionou é desperdício, e mais uma oportunidade de

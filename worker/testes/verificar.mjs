@@ -7,6 +7,13 @@ const ESPERADO = {
   '../src/lib-http.js': ['Frasco', 'pedido', 'seguirAte', 'getHTML', 'pausa', 'campo', 'ErroSessao'],
   '../src/normalizar.js': ['normalizar', 'semelhanca', 'equipaCanonica', 'fichas'],
   '../src/emparelhar.js': ['emparelhar'],
+  '../src/analise.js': ['analisarJornada', 'blocoAnalise'],
+  '../src/fontes/ligaportugal.js': [
+    'golosDaLiga', 'assistenciasDaLiga', 'amarelosDaLiga', 'vermelhosDaLiga',
+    'disciplinaDaLiga', 'marcadoresDaLiga', 'lerLideres', 'ESTATISTICAS',
+    'classificacaoDaLiga', 'jogosDaJornada', 'jogosDeVariasJornadas',
+    'lerClassificacaoLP', 'lerJogosLP',
+  ],
   '../src/sugerir.js': ['sugerirSubstituicoes'],
   '../src/firestore.js': ['bd', 'guardarBoletim', 'lerBoletim', 'lerPerfil', 'guardarPerfil', 'AMBIENTE'],
   '../src/fontes/analisar.js': ['lerJogadores', 'lerCartao', 'paraMilhoes', 'paraPercentagem', 'detectarPosicao'],

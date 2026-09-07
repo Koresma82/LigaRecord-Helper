@@ -71,10 +71,15 @@ async function diaria() {
   }
 }
 
-async function mensagemDeSexta() {
-  // A rotina vive em tarefas.js para o `npm run sexta` correr o mesmo
-  // codigo. Aqui so se actualiza o estado que a pagina /saude mostra.
-  const r = await enviarResumoSemanal({ log: () => {} });
+// A analise da jornada, enviada as quartas, quintas e sextas.
+//
+// A rotina vive em tarefas.js para o `npm run sexta` correr o mesmo codigo.
+// Aqui so se actualiza o estado que a pagina /saude mostra.
+//
+// `comIA` so a sexta: a chamada as noticias e a unica parte paga, e corre-la
+// tres vezes por semana triplicava o custo para acrescentar pouco.
+async function analiseDoDia({ comIA = false } = {}) {
+  const r = await enviarResumoSemanal({ log: () => {}, comIA });
   if (r.ok) {
     ultimaRecolha = new Date().toISOString();
     ultimoErro = null;
@@ -84,9 +89,19 @@ async function mensagemDeSexta() {
   }
 }
 
+// Todos os dias: recolha leve, silenciosa salvo mudanca no teu plantel.
 cron.schedule('0 7 * * *', diaria, { timezone: FUSO });
+
+// Quarta: recolha completa (valores novos), e a analise 30 minutos depois,
+// para a mensagem ja levar os dados frescos.
 cron.schedule('0 8 * * 3', completa, { timezone: FUSO });
-cron.schedule('0 8 * * 5', mensagemDeSexta, { timezone: FUSO });
+cron.schedule('30 8 * * 3', () => analiseDoDia(), { timezone: FUSO });
+
+// Quinta: ja saiu o mapa de castigos.
+cron.schedule('0 8 * * 4', () => analiseDoDia(), { timezone: FUSO });
+
+// Sexta: a ultima antes do fecho, e a unica com a analise das noticias.
+cron.schedule('0 8 * * 5', () => analiseDoDia({ comIA: true }), { timezone: FUSO });
 
 // O Railway mata servicos sem porta a escutar. Isto tambem serve de
 // pagina de saude para saberes se o worker esta vivo.

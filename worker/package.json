@@ -13,7 +13,9 @@
     "inspect-jornada": "node src/inspect-jornada.js",
     "inspect-zerozero": "node src/inspect-zerozero.js",
     "inspect-maisfutebol": "node src/inspect-maisfutebol.js",
-    "sexta": "node src/enviar-sexta.js"
+    "sexta": "node src/enviar-sexta.js",
+    "inspect-lp": "node src/inspect-ligaportugal.js",
+    "inspect-lp-tabela": "node src/inspect-lp-tabela.js"
   },
   "dependencies": {
     "cheerio": "^1.0.0",
