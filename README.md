@@ -314,6 +314,35 @@ menor, o `npm run inspect-lp` mostra-o.
 
 **A época muda todos os anos** — `LP_EPOCA=20262027` no `.env`.
 
+## A Liga Record bloqueia servidores
+
+Do Railway, a ligação a `liga.record.pt` morre sem sequer se estabelecer —
+30 segundos sem resposta. Do mesmo contentor, a API da Liga Portugal responde
+em 0,19s. Não é lentidão nem timeout: é bloqueio de IPs de datacenter.
+
+Por isso a recolha está dividida:
+
+| Dados | Onde |
+|---|---|
+| Jornadas, classificação, golos, assistências, cartões, lesões | **Railway**, todos os dias |
+| Mercado: valores, pontuações, plantel | **A tua máquina**, quando precisares |
+
+A Liga Record deixou de ser fatal. Se não responder, o worker reaproveita o
+mercado da última recolha que conseguiu e actualiza tudo o resto. O boletim
+guarda `mercadoRecolhidoEm`, e tanto a app como a mensagem do Telegram dizem
+a idade dos valores — um plantel avaliado com preços de há uma semana leva a
+decisões erradas, e o pior seria não se saber que estão velhos.
+
+Para refrescar os valores, na tua máquina, com `AMBIENTE=prod` no `.env`:
+
+```cmd
+cd worker
+npm run mercado
+```
+
+Escreve no mesmo Firestore que o Railway lê. Os valores da Liga Record mudam
+à quarta, no máximo — uma vez por semana chega.
+
 ## Análise da jornada
 
 Além de quem está de fora, a mensagem traz o que ajuda a montar o onze:

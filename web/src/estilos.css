@@ -840,3 +840,9 @@ html, body {
 .resultado--E { background: var(--gr); }
 .resultado--D { background: var(--fora); color: #fff; }
 .resultado--N { background: var(--linha); color: var(--apagado); }
+
+/* Aviso de idade dos dados: informativo, não alarmante. */
+.aviso--idade {
+  border-left-color: var(--def);
+  font-size: 12px;
+}

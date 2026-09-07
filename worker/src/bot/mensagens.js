@@ -240,6 +240,20 @@ export function resumoSemanal(boletim) {
   const analise = blocoAnalise(boletim);
   if (analise) linhas.push(analise);
 
+  // Se os valores do mercado nao sao desta recolha, diz-lo. Um plantel
+  // avaliado com precos de ha uma semana leva a decisoes erradas, e o pior
+  // e nao se saber que estao velhos.
+  if (boletim.mercadoActual === false && boletim.mercadoRecolhidoEm) {
+    const dias = Math.round(
+      (Date.now() - new Date(boletim.mercadoRecolhidoEm).getTime()) / 86400000
+    );
+    linhas.push(
+      '',
+      `⏳ _Valores e pontuações de ${new Date(boletim.mercadoRecolhidoEm).toLocaleDateString('pt-PT')}` +
+        `${dias > 0 ? ` (${dias} dia${dias > 1 ? 's' : ''})` : ''}. O resto está actualizado._`
+    );
+  }
+
   linhas.push('', `_Na liga: ${lesionados} lesionados, ${castigados} castigados._`);
 
   if (boletim.avisos?.length) {

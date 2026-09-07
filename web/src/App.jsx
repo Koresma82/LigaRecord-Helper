@@ -107,6 +107,16 @@ export default function App() {
         </p>
       </header>
 
+      {boletim.mercadoActual === false && boletim.mercadoRecolhidoEm && (
+        <div className="aviso aviso--idade">
+          Valores e pontuações de{' '}
+          <strong>
+            {new Date(boletim.mercadoRecolhidoEm).toLocaleDateString('pt-PT')}
+          </strong>
+          . Lesões, castigos, jogos e classificação estão actualizados.
+        </div>
+      )}
+
       {boletim.avisos?.map((a) => (
         <div className="aviso" key={a}>{a}</div>
       ))}
@@ -179,6 +189,11 @@ export default function App() {
         <pre>
 {`gerado           ${new Date(boletim.geradoEm).toLocaleString('pt-PT')}
 jornada          ${jornada ?? '?'} (${boletim.jornada?.origem ?? '?'})
+mercado lido em  ${
+  boletim.mercadoRecolhidoEm
+    ? new Date(boletim.mercadoRecolhidoEm).toLocaleString('pt-PT')
+    : '?'
+}${boletim.mercadoActual === false ? '  (desactualizado)' : ''}
 ronda Liga Record ${boletim.ronda?.numero ?? '?'}
 jogadores lidos  ${boletim.diagnostico?.jogadoresLidos ?? '?'}
 ausências lidas  ${boletim.diagnostico?.ausenciasLidas ?? '?'}

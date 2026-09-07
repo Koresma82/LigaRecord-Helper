@@ -207,6 +207,9 @@ export async function recolherLeve({ log = console.log, duvidasIA: forcarDuvidas
     ...anterior,
     geradoEm: new Date().toISOString(),
     tipo: 'leve',
+    // A recolha leve nunca toca na Liga Record: herda a data do mercado.
+    mercadoRecolhidoEm: anterior.mercadoRecolhidoEm ?? anterior.geradoEm,
+    mercadoActual: anterior.mercadoActual ?? true,
     avisos,
     equipa: {
       ...anterior.equipa,
@@ -269,10 +272,56 @@ export async function recolherLeve({ log = console.log, duvidasIA: forcarDuvidas
 export async function recolher({ log = console.log, anterior = null } = {}) {
   const avisos = [];
 
+  // ---------------------------------------------------------------------
+  // A Liga Record e a UNICA fonte do mercado: valores, pontuacoes, plantel.
+  // Tambem e a unica que bloqueia servidores de datacenter — do Railway, a
+  // ligacao morre sem sequer se estabelecer.
+  //
+  // Por isso deixou de ser fatal. Se nao responder, reaproveitamos o mercado
+  // da ultima recolha que conseguiu, e o resto (jornadas, classificacao,
+  // golos, cartoes, lesoes) e recolhido na mesma. Assim o Railway mantem
+  // tudo o que consegue actualizado, e tu corres localmente so quando
+  // precisares de valores novos.
+  //
+  // O que NAO fazemos e fingir que esta tudo bem: o boletim leva a data do
+  // mercado e um aviso quando ele nao e desta recolha.
+  // ---------------------------------------------------------------------
   log('A ler a Liga Record...');
-  // Em serie, nao em paralelo: partilham a mesma sessao e quatro logins
-  // simultaneos so servem para nos porem na lista negra.
-  const todosJogadores = await lr.obterTodosJogadores({ log });
+
+  const boletimAnterior = anterior ?? (await lerBoletim().catch(() => null));
+
+  let todosJogadores = [];
+  let mercadoDesactualizado = null;
+
+  try {
+    // Em serie, nao em paralelo: partilham a mesma sessao e quatro pedidos
+    // simultaneos so servem para nos porem na lista negra.
+    todosJogadores = await lr.obterTodosJogadores({ log });
+  } catch (erro) {
+    const motivo = erro.message.split('\n')[0];
+    log(`  Liga Record indisponivel: ${motivo}`);
+
+    todosJogadores = boletimAnterior?.mercado ?? [];
+    mercadoDesactualizado = boletimAnterior?.mercadoRecolhidoEm ?? boletimAnterior?.geradoEm ?? null;
+
+    if (!todosJogadores.length) {
+      throw new Error(
+        `A Liga Record nao respondeu (${motivo}) e nao ha mercado anterior ` +
+          'guardado.\nCorre `npm run recolher` na tua maquina uma vez, para ' +
+          'haver um ponto de partida.'
+      );
+    }
+
+    const quando = mercadoDesactualizado
+      ? new Date(mercadoDesactualizado).toLocaleDateString('pt-PT')
+      : 'data desconhecida';
+
+    log(`  A usar o mercado de ${quando}: ${todosJogadores.length} jogadores.`);
+    avisos.push(
+      `A Liga Record não respondeu. Valores e pontuações são de ${quando} — ` +
+        'o resto está actualizado. Corre a recolha na tua máquina para os refrescar.'
+    );
+  }
 
   // O plantel vem do que tu registaste, nao do site. O login da Liga Record
   // usa SSO por iframe, que um cliente HTTP nao reproduz — e nao vale a pena,
@@ -313,7 +362,11 @@ export async function recolher({ log = console.log, anterior = null } = {}) {
 
   // Duas contagens diferentes: a jornada da Primeira Liga (que decide
   // lesoes e castigos) e a ronda da Liga Record (que so arranca na 6.a).
-  let [jornada, ronda] = await Promise.all([jornadaActual({ log }), lr.obterJornada()]);
+  // A ronda da Liga Record tambem pode falhar; nao e critica.
+  let [jornada, ronda] = await Promise.all([
+    jornadaActual({ log }),
+    lr.obterJornada().catch(() => ({ numero: null, fechoMercado: null, origem: 'indisponivel' })),
+  ]);
 
   // Ultimo recurso: a Liga Record arranca a sua ronda 1 na 6.a jornada do
   // campeonato, portanto jornada = ronda + 5. So vale enquanto o jogo
@@ -581,6 +634,14 @@ export async function recolher({ log = console.log, anterior = null } = {}) {
 
   const boletim = {
     geradoEm: new Date().toISOString(),
+
+    // Quando o mercado foi lido pela ultima vez COM SUCESSO. Se esta
+    // recolha nao chegou a Liga Record, mantem a data antiga — e assim a
+    // app e o bot podem dizer a verdade sobre a idade dos valores em vez de
+    // os apresentarem como se fossem de agora.
+    mercadoRecolhidoEm: mercadoDesactualizado ?? new Date().toISOString(),
+    mercadoActual: !mercadoDesactualizado,
+
     jornada: { ...jornada, fechoMercado: ronda.fechoMercado },
     ronda,
     avisos,
