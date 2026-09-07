@@ -222,6 +222,7 @@ export async function recolherLeve({ log = console.log, duvidasIA: forcarDuvidas
 
         return {
           ...j,
+          equipaCanonica: equipaCanonica(j.equipa),
           golos: marcador?.golos ?? anteriorDoPlantel?.golos ?? 0,
           // A recolha leve nao vai buscar golos nem assistencias; herda-os
           // da ultima completa, que corre a quarta.
@@ -663,6 +664,7 @@ export async function recolher({ log = console.log, anterior = null } = {}) {
 
         return {
           ...limpar(j),
+          equipaCanonica: equipaCanonica(j.equipa),
           golos: marcador?.golos ?? 0,
           assistencias: marcador?.assistencias ?? 0,
           amarelos,
@@ -686,8 +688,19 @@ export async function recolher({ log = console.log, anterior = null } = {}) {
     // Campo proprio, deliberadamente fora de emRisco: isto e interpretacao
     // de noticias, nao um facto lido de uma tabela.
     duvidasIA: await duvidasSeNecessario(minhaEquipa.jogadores, jornada.numero, anterior, { log }),
-    classificacao: tabela,
-    proximosJogos: proximosJogos.dados,
+    classificacao: tabela.map((e) => ({ ...e, equipaCanonica: equipaCanonica(e.equipa) })),
+    // Cada jogo leva o nome canonico das duas equipas.
+    //
+    // A app precisa de saber se tem jogadores num jogo, e comparava os nomes
+    // tal e qual: o plantel diz "Nacional" e a API diz "CD Nacional", por
+    // isso so os clubes escritos igual nas duas fontes eram assinalados.
+    // A tabela de alcunhas vive aqui no worker e nao vale a pena duplica-la
+    // no browser — anotamos os dados e a app so compara.
+    proximosJogos: proximosJogos.dados.map((j) => ({
+      ...j,
+      casaCanonica: equipaCanonica(j.casa),
+      foraCanonica: equipaCanonica(j.fora),
+    })),
     castigosPorConfirmar: porConfirmar,
     porConfirmar: emparelhado.ambiguos.map((a) => ({
       jogador: a.jogador.nome,

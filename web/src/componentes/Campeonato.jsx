@@ -5,11 +5,19 @@ import { euros } from '../lib/formatar.js';
 // O clube do próprio plantel fica destacado: numa tabela de 18 linhas, o que
 // interessa é encontrar depressa as equipas onde tens jogadores.
 export default function Campeonato({ classificacao = [], jogos = [], plantel = [], jornada }) {
-  const meusClubes = new Set(plantel.map((j) => j.equipa));
+  // Comparamos pelo nome canónico, que o worker já anotou.
+  //
+  // Comparar os nomes tal e qual falhava: o plantel diz "Nacional" e a API
+  // diz "CD Nacional". Só os clubes escritos igual nas duas fontes eram
+  // assinalados — na prática, o FC Porto e o Santa Clara.
+  const canonicoDoJogador = (j) => j.equipaCanonica ?? j.equipa;
+
+  const meusClubes = new Set(plantel.map(canonicoDoJogador));
 
   // Quantos jogadores tenho em cada clube. Num jogo com quatro dos meus
   // vale a pena estar atento; num com zero, não.
-  const quantosEm = (clube) => plantel.filter((j) => j.equipa === clube).length;
+  const quantosEm = (canonico) =>
+    plantel.filter((j) => canonicoDoJogador(j) === canonico).length;
 
   // Agrupar por jornada. A pagina do zerozero e por jornada, e misturar
   // duas numa lista so tornava a informacao inutil — nao dava para saber
@@ -35,8 +43,8 @@ export default function Campeonato({ classificacao = [], jogos = [], plantel = [
 
           <div className={`jogos${n === jornada ? ' jogos--destaque' : ''}`}>
             {porJornada[n].map((j) => {
-              const nCasa = quantosEm(j.casa);
-              const nFora = quantosEm(j.fora);
+              const nCasa = quantosEm(j.casaCanonica ?? j.casa);
+              const nFora = quantosEm(j.foraCanonica ?? j.fora);
               const meus = nCasa + nFora;
 
               return (
@@ -95,7 +103,12 @@ export default function Campeonato({ classificacao = [], jogos = [], plantel = [
             </thead>
             <tbody>
               {classificacao.map((e) => (
-                <tr key={e.equipa} className={meusClubes.has(e.equipa) ? 'linha--meu' : ''}>
+                <tr
+                  key={e.equipa}
+                  className={
+                    meusClubes.has(e.equipaCanonica ?? e.equipa) ? 'linha--meu' : ''
+                  }
+                >
                   <td className="pos">{e.posicao}</td>
                   <td className="equipa">{e.equipa}</td>
                   <td>{e.jogos}</td>
