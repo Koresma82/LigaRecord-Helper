@@ -10,13 +10,9 @@ import { resumoSemanal, erroRecolha } from './bot/mensagens.js';
 // copias, testar a mao deixaria de provar que a automatica funciona — que e
 // o unico motivo para haver um comando manual.
 //
-// A analise vai nas tres mensagens da semana (quarta, quinta e sexta), mas
-// a chamada paga a IA NAO. So a de sexta a faz.
-//
-// A razao e de custo, nao de utilidade: correr as duvidas por IA tres vezes
-// por semana triplica a factura para acrescentar pouco — as noticias de
-// quarta ainda sao as mesmas de terca. A sexta e a que decide, e e essa que
-// leva tudo.
+// `comIA` decide se esta chamada verifica as noticias. Quem decide QUANDO
+// isso acontece e o servidor.js (quarta, quinta e sexta por defeito, so
+// sexta se IA_SO_SEXTA=1) — este ficheiro so obedece ao que lhe mandam.
 // -----------------------------------------------------------------------------
 export async function enviarResumoSemanal({ log = () => {}, comIA = true } = {}) {
   try {
