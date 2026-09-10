@@ -738,13 +738,6 @@ export async function recolher({ log = console.log, anterior = null, duvidasIA =
     ),
   ]);
 
-  // NAO simplesmente "jogosActual ? listaJogos : jogosUsar" — isso perdia
-  // os jogos de OUTRAS jornadas que a mesma recolha tenha trazido bem. Se so
-  // a jornada 6 faltou mas a 7 veio junto no mesmo pedido, o fallback da 6
-  // nao pode apagar a 7 que ja tinhamos.
-  const outrasJornadas = listaJogos.filter((x) => Number(x.jornada) !== porJogar);
-  const proximosJogos = { dados: unirJogos(outrasJornadas, jogosUsar) };
-
   // Estatisticas por jogador. Emparelhamento DIFUSO, nao por igualdade: o
   // zerozero escreve "Vangelis Pavlidis" e a Liga Record "Pavlidis".
   const indiceGolos = criarIndice(golos);
@@ -759,6 +752,13 @@ export async function recolher({ log = console.log, anterior = null, duvidasIA =
   // jornada, tira-o do onze" — um conselho ACTIVAMENTE errado, nao so uma
   // lacuna. Foi o que aconteceu: FC Porto - Casa Pia estava marcado e os 23
   // jogadores do plantel apareceram todos como "sem jogo".
+  //
+  // TEM DE VIR ANTES de `proximosJogos` e de `adversarios` — os dois usam
+  // `jogosUsar`, que e o que este bloco calcula. Ja esteve depois por
+  // engano e rebentou em producao com "Cannot access 'jogosUsar' before
+  // initialization": uma variavel `let` existe desde o topo da funcao mas
+  // fica presa ate a linha da sua declaracao correr, e qualquer leitura
+  // antes disso e um erro, nao um `undefined`.
   const JOGOS_MINIMOS_PLAUSIVEIS = 4;
   const jogosDaJornada = listaJogos.filter((x) => Number(x.jornada) === porJogar);
 
@@ -830,6 +830,13 @@ export async function recolher({ log = console.log, anterior = null, duvidasIA =
   }
 
   const jogosIndisponiveis = jogosUsar.length === 0;
+
+  // NAO simplesmente "jogosActual ? listaJogos : jogosUsar" — isso perdia
+  // os jogos de OUTRAS jornadas que a mesma recolha tenha trazido bem. Se so
+  // a jornada 6 faltou mas a 7 veio junto no mesmo pedido, o fallback da 6
+  // nao pode apagar a 7 que ja tinhamos.
+  const outrasJornadas = listaJogos.filter((x) => Number(x.jornada) !== porJogar);
+  const proximosJogos = { dados: unirJogos(outrasJornadas, jogosUsar) };
 
   const adversarios = new Map();
   // O proximo adversario e o da jornada POR JOGAR — que e `porJogar`, nao
