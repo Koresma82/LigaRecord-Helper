@@ -9,14 +9,22 @@
   "scripts": {
     "start": "node src/servidor.js",
     "recolher": "node src/recolher.js",
+    "mercado": "node src/mercado.js",
+    "sexta": "node src/enviar-sexta.js",
     "verificar": "node testes/verificar.mjs",
+    "teste-castigos": "node testes/teste-castigos.mjs",
+    "teste-montar": "node testes/teste-montar.mjs",
+    "teste-optimalidade": "node testes/teste-optimalidade.mjs",
+    "teste": "npm run verificar && npm run teste-castigos && npm run teste-montar && npm run teste-optimalidade",
+    "inspect": "node src/inspect.js",
     "inspect-jornada": "node src/inspect-jornada.js",
     "inspect-zerozero": "node src/inspect-zerozero.js",
     "inspect-maisfutebol": "node src/inspect-maisfutebol.js",
-    "sexta": "node src/enviar-sexta.js",
+    "inspect-disciplina": "node src/inspect-disciplina.js",
+    "inspect-campeonato": "node src/inspect-campeonato.js",
+    "inspect-tm": "node src/inspect-tm.js",
     "inspect-lp": "node src/inspect-ligaportugal.js",
-    "inspect-lp-tabela": "node src/inspect-lp-tabela.js",
-    "mercado": "node src/mercado.js"
+    "inspect-lp-tabela": "node src/inspect-lp-tabela.js"
   },
   "dependencies": {
     "cheerio": "^1.0.0",

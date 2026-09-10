@@ -129,7 +129,7 @@ Colas no `.env` a seguir a `FIREBASE_SERVICE_ACCOUNT=`, **sem aspas à volta**.
 Primeiro, uma verificação rápida que não precisa de credenciais nenhumas:
 
 ```cmd
-npm run verificar
+npm run teste
 ```
 
 Confirma que todos os módulos carregam e exportam o que os outros esperam.
@@ -287,7 +287,7 @@ aberto no telemóvel.
 | `Unexpected token` ao ler o JSON | Puseste aspas à volta do valor no `.env` — tira-as |
 | `Sem plantel registado` | Abre a app → Construir → Gravar como o meu plantel |
 | `permission-denied` ao gravar plantel | Regras do Firestore desactualizadas — republica-as |
-| `So N ausencias em toda a liga` | Selectores do Zerozero desatualizados — `npm run inspect-zerozero` |
+| `So N ausencias em toda a liga` | A tabela de lesões do Transfermarkt mudou — `npm run inspect-tm` |
 | Railway a reiniciar em ciclo | Root Directory não está em `worker` |
 | `does not provide an export named` | Corre `npm run verificar` — diz-te qual é |
 | `EPERM` ou `EBUSY` no npm install | Antivírus ou OneDrive a segurar ficheiros |

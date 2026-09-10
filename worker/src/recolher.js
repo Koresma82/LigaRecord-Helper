@@ -3,6 +3,7 @@ import { pathToFileURL } from 'node:url';
 import * as lr from './fontes/ligarecord.js';
 import { lesoesDaLiga } from './fontes/transfermarkt.js';
 import { castigosPorAcumulacao } from './fontes/disciplina.js';
+import { actualizarCastigosActivos } from './castigos-activos.js';
 import { duvidasDaJornada } from './fontes/duvidas-ia.js';
 import {
   disciplinaDaLiga as disciplinaMaisFutebol,
@@ -98,25 +99,44 @@ async function comAlternativa(nome, principal, alternativa, { log = () => {} } =
   }
 }
 
+// Tres fontes por ordem de preferencia. A oficial e JSON e cruza amarelos
+// com vermelhos por id, sem depender de nomes.
+//
+// DEVOLVE O NOME DA FONTE, e isso e essencial e nao cosmetico: a deteccao de
+// castigos compara contagens entre recolhas, e contagens de fontes
+// diferentes nao se comparam. Sem saber de onde vieram os numeros, uma
+// mudanca de fonte inventava travessias de multiplos de 5 que nunca houve.
+//
+// (Antes o campo `fonte` estava fixo em 'zerozero' mesmo quando os dados
+// vinham da API oficial. O boletim mentia sobre a proveniencia.)
+const FONTES_DISCIPLINA = [
+  { nome: 'ligaportugal', ler: (o) => disciplinaOficial(o) },
+  { nome: 'zerozero', ler: (o) => disciplinaZeroZero(o) },
+  { nome: 'maisfutebol', ler: (o) => disciplinaMaisFutebol(o) },
+];
+
 async function lerDisciplina({ log = () => {} } = {}) {
-  // Tres fontes por ordem de preferencia. A oficial e JSON e cruza amarelos
-  // com vermelhos por playerId, sem depender de nomes.
-  const linhas = await comAlternativa(
-    'Disciplina',
-    () => disciplinaOficial({ log }),
-    () =>
-      comAlternativa(
-        'Disciplina (2.a alternativa)',
-        () => disciplinaZeroZero({ log }),
-        () => disciplinaMaisFutebol({ log }),
-        { log }
-      ),
-    { log }
-  );
+  // Igual ao comAlternativa: FORCAR_ALTERNATIVA=1 salta a fonte principal
+  // para se poder exercitar em dev o caminho que o Railway vai correr.
+  const fontes =
+    process.env.FORCAR_ALTERNATIVA === '1' ? FONTES_DISCIPLINA.slice(1) : FONTES_DISCIPLINA;
+
+  for (const { nome, ler } of fontes) {
+    try {
+      const linhas = await ler({ log });
+      // Uma lista vazia conta como falha, nao como "ninguem tem cartoes".
+      if (Array.isArray(linhas) && linhas.length) {
+        return { linhas, fonte: nome };
+      }
+      log(`  Disciplina (${nome}): nada devolvido — a tentar a seguinte`);
+    } catch (erro) {
+      log(`  Disciplina (${nome}): ${erro.message.split('\n')[0]}`);
+    }
+  }
+
   // Aqui o [] silencioso e perigoso: zero cartoes lidos passaria por "ninguem
   // esta em risco de castigo", que e uma mentira tranquilizadora.
-  if (!linhas.length) throw new Error('Nenhuma fonte de disciplina respondeu.');
-  return linhas;
+  throw new Error('Nenhuma fonte de disciplina respondeu.');
 }
 
 // -----------------------------------------------------------------------------
@@ -163,20 +183,64 @@ export async function recolherLeve({ log = console.log, duvidasIA: forcarDuvidas
   }
 
   let cartoes = anterior.cartoes ?? [];
+  let fonteCartoes = anterior.fonteCartoes ?? null;
   let emRiscoDeCastigo = anterior.emRiscoDeCastigo ?? [];
   let porConfirmar = [];
 
+  // A jornada por jogar. A recolha leve nao volta a determina-la: herda a do
+  // boletim anterior, tal como faz com tudo o resto.
+  const proximaJornada = anterior.jornada?.numero ?? null;
+
+  // Os castigos que ainda nao foram cumpridos, vindos do boletim anterior.
+  // Sobrevivem a esta recolha mesmo que hoje nao haja travessia nenhuma a
+  // detectar — e o ponto todo da correccao.
+  let castigosActivos = anterior.castigosActivos ?? [];
+
   try {
-    cartoes = await lerDisciplina({ log });
-    const r = castigosPorAcumulacao(cartoes, anterior.cartoes);
-    ausencias = [...ausencias, ...r.castigados.filter((c) => c.certeza === 'alta')];
+    const d = await lerDisciplina({ log });
+    cartoes = d.linhas;
+
+    const r = castigosPorAcumulacao(cartoes, anterior.cartoes, {
+      fonte: d.fonte,
+      fonteAnterior: fonteCartoes,
+      jornada: proximaJornada,
+    });
+
+    fonteCartoes = d.fonte;
     porConfirmar = r.castigados.filter((c) => c.certeza === 'baixa');
     emRiscoDeCastigo = r.emRisco;
-    log(`  Castigos: ${r.castigados.length}, ${r.emRisco.length} a um amarelo`);
+
+    castigosActivos = actualizarCastigosActivos({
+      guardados: castigosActivos,
+      detectados: r.castigados.filter((c) => c.certeza === 'alta'),
+      proximaJornada,
+    });
+
+    if (!r.comparavel && anterior.cartoes?.length) {
+      avisos.push(
+        `Os cartões vieram de ${d.fonte} e os anteriores de ${anterior.fonteCartoes ?? 'fonte desconhecida'}. ` +
+          'Contagens de fontes diferentes não se comparam, por isso esta recolha não ' +
+          'declara castigos novos. Resolve-se sozinho na próxima recolha da mesma fonte.'
+      );
+    }
+
+    log(
+      `  Castigos: ${castigosActivos.length} activos, ` +
+        `${porConfirmar.length} por confirmar, ${r.emRisco.length} a um amarelo (fonte: ${d.fonte})`
+    );
   } catch (erro) {
     log(`  Disciplina: ${erro.message.split('\n')[0]}`);
     avisos.push('A leitura dos cartões falhou; só as lesões estão actualizadas.');
+    // Sem cartoes novos os castigos activos mantem-se: um castigo nao deixa
+    // de existir por a pagina ter falhado.
+    castigosActivos = actualizarCastigosActivos({
+      guardados: castigosActivos,
+      detectados: [],
+      proximaJornada,
+    });
   }
+
+  ausencias = [...ausencias, ...castigosActivos];
 
   if (falha && minhaEquipa.jogadores.length) {
     throw new Error(
@@ -251,7 +315,12 @@ export async function recolherLeve({ log = console.log, duvidasIA: forcarDuvidas
     }),
     ligaInteira: emparelhado.ligados.map(({ bruto, ...r }) => r),
     cartoes,
+    // Guardada para a proxima recolha saber se pode comparar contagens.
+    fonteCartoes,
     emRiscoDeCastigo,
+    // Os castigos por cumprir, com a jornada a que se aplicam. Sobrevivem
+    // entre recolhas ate essa jornada ser jogada.
+    castigosActivos,
     castigosPorConfirmar: porConfirmar,
     // Campo proprio, deliberadamente fora de emRisco: isto e interpretacao
     // de noticias, nao um facto lido de uma tabela.
@@ -391,6 +460,29 @@ export async function recolher({ log = console.log, anterior = null } = {}) {
         'ou define LR_JORNADA no .env.'
     );
   }
+
+  // ---------------------------------------------------------------------
+  // AS DUAS JORNADAS, escritas de uma vez para nao voltarem a divergir.
+  //
+  // `jornada.numero` significa A JORNADA POR JOGAR. E o que o
+  // jornadaPelaClassificacao devolve (jogos disputados + 1), o que o
+  // selector do zerozero mostra, e o que a app poe no cabecalho.
+  //
+  // O BUG QUE ISTO CORRIGE: metade do ficheiro tratava `jornada.numero`
+  // como a ultima jornada JA DISPUTADA. Os jogos eram pedidos para
+  // `numero + 1` e `numero + 2`, e o proximo adversario procurado em
+  // `numero + 1`. Resultado visivel: o cabecalho dizia "JORNADA 6" e o
+  // separador Campeonato mostrava os jogos da 7 e da 8, saltando por
+  // completo a jornada que realmente vinha a seguir. A classificacao era
+  // pedida a API com round=6, uma jornada que ainda nao foi jogada.
+  //
+  // Agora ha dois nomes e cada um diz o que e.
+  // ---------------------------------------------------------------------
+  const porJogar = jornada.numero ?? null;
+  const disputada = porJogar && porJogar > 1 ? porJogar - 1 : null;
+  // Sem jornada conhecida nao se pedem jogos: `null + 1` dava 1 e trazia os
+  // jogos da primeira jornada da epoca como se fossem os proximos.
+  const jornadasAPedir = porJogar ? [porJogar, porJogar + 1] : [];
   log(`  ${todosJogadores.length} jogadores, ${minhaEquipa.jogadores.length} no plantel`);
 
   // Antes da 1a ronda o plantel esta vazio e nao ha nada para avisar.
@@ -423,8 +515,13 @@ export async function recolher({ log = console.log, anterior = null } = {}) {
 
   // Castigos, calculados a partir dos cartoes acumulados.
   let cartoes = [];
+  let fonteCartoes = null;
   let emRiscoDeCastigo = [];
   let porConfirmar = [];
+
+  // Os castigos por cumprir herdados do boletim anterior. Nao se perdem so
+  // porque hoje nao houve travessia nova a detectar.
+  let castigosActivos = anterior?.castigosActivos ?? [];
 
   // Declarada aqui e nao mais abaixo: o bloco dos castigos preenche-a antes
   // do bloco do campeonato correr, e ter a declaracao depois rebentava com
@@ -433,8 +530,16 @@ export async function recolher({ log = console.log, anterior = null } = {}) {
   let indiceCartoes = new Map();
 
   try {
-    cartoes = await lerDisciplina({ log });
-    const r = castigosPorAcumulacao(cartoes, anterior?.cartoes);
+    const d = await lerDisciplina({ log });
+    cartoes = d.linhas;
+
+    const r = castigosPorAcumulacao(cartoes, anterior?.cartoes, {
+      fonte: d.fonte,
+      fonteAnterior: anterior?.fonteCartoes ?? null,
+      jornada: porJogar,
+    });
+
+    fonteCartoes = d.fonte;
 
     // Separacao deliberada. Um castigo de certeza baixa (sem historico para
     // comparar) NAO entra nas ausencias, logo nao gera sugestao de troca.
@@ -446,16 +551,27 @@ export async function recolher({ log = console.log, anterior = null } = {}) {
     const certos = r.castigados.filter((c) => c.certeza === 'alta');
     porConfirmar = r.castigados.filter((c) => c.certeza === 'baixa');
 
-    ausencias = [...ausencias, ...certos];
+    castigosActivos = actualizarCastigosActivos({
+      guardados: castigosActivos,
+      detectados: certos,
+      proximaJornada: porJogar,
+    });
+
     emRiscoDeCastigo = r.emRisco;
 
-
+    if (!r.comparavel && anterior?.cartoes?.length) {
+      avisos.push(
+        `Os cartões vieram de ${d.fonte} e os anteriores de ${anterior.fonteCartoes ?? 'fonte desconhecida'}. ` +
+          'Contagens de fontes diferentes não se comparam, por isso esta recolha não ' +
+          'declara castigos novos.'
+      );
+    }
 
     indiceCartoes = criarIndice(cartoes);
 
     log(
-      `  Castigos: ${certos.length} confirmados, ${porConfirmar.length} por confirmar, ` +
-        `${r.emRisco.length} a um amarelo`
+      `  Castigos: ${certos.length} novos, ${castigosActivos.length} activos, ` +
+        `${porConfirmar.length} por confirmar, ${r.emRisco.length} a um amarelo (fonte: ${d.fonte})`
     );
 
     if (porConfirmar.length) {
@@ -471,7 +587,18 @@ export async function recolher({ log = console.log, anterior = null } = {}) {
       'A leitura dos cartões falhou; só as lesões estão actualizadas. ' +
         'Confirma os castigos à mão.'
     );
+    // Um castigo nao deixa de existir por a pagina ter falhado: os activos
+    // mantem-se, so se limpam os ja cumpridos.
+    castigosActivos = actualizarCastigosActivos({
+      guardados: castigosActivos,
+      detectados: [],
+      proximaJornada: porJogar,
+    });
   }
+
+  // Os castigos por cumprir entram nas ausencias, venham eles de hoje ou de
+  // uma recolha anterior.
+  ausencias = [...ausencias, ...castigosActivos];
 
   const temPlantel = minhaEquipa.jogadores.length > 0;
 
@@ -557,7 +684,7 @@ export async function recolher({ log = console.log, anterior = null } = {}) {
     // a tabela da jornada 5 e a que reflecte os 5 jogos jogados.
     comAlternativa(
       'Classificacao',
-      () => classificacaoOficial({ log, jornada: jornada.numero }),
+      () => classificacaoOficial({ log, jornada: disputada }),
       () =>
         comAlternativa(
           'Classificacao (2.a alternativa)',
@@ -574,12 +701,12 @@ export async function recolher({ log = console.log, anterior = null } = {}) {
     // Pedir a jornada 5 aqui traria jogos ja realizados.
     comAlternativa(
       'Jogos',
-      () => jogosOficial([jornada.numero + 1, jornada.numero + 2], { log }),
+      () => jogosOficial(jornadasAPedir, { log }),
       () =>
         comAlternativa(
           'Jogos (2.a alternativa)',
-          () => jogosDeVariasJornadas([jornada.numero + 1, jornada.numero + 2], { log }),
-          () => jogosMaisFutebol([jornada.numero + 1, jornada.numero + 2], { log }),
+          () => jogosDeVariasJornadas(jornadasAPedir, { log }),
+          () => jogosMaisFutebol(jornadasAPedir, { log }),
           { log }
         ),
       { log }
@@ -605,9 +732,9 @@ export async function recolher({ log = console.log, anterior = null } = {}) {
   const indiceGolos = criarIndice(golos);
 
   const adversarios = new Map();
-  // O proximo adversario e o da primeira jornada POR JOGAR.
-  const proximaJornada = jornada.numero + 1;
-  for (const j of listaJogos.filter((x) => Number(x.jornada) === proximaJornada)) {
+  // O proximo adversario e o da jornada POR JOGAR — que e `porJogar`, nao
+  // `porJogar + 1`.
+  for (const j of listaJogos.filter((x) => Number(x.jornada) === porJogar)) {
     const base = { data: j.data, hora: j.hora, jornada: j.jornada };
     adversarios.set(equipaCanonica(j.casa), { ...base, adversario: j.fora, casa: true });
     adversarios.set(equipaCanonica(j.fora), { ...base, adversario: j.casa, casa: false });
@@ -684,7 +811,12 @@ export async function recolher({ log = console.log, anterior = null } = {}) {
     // multiplo de 5 amarelos. Sem isto nao ha forma de distinguir um castigo
     // novo de um ja cumprido.
     cartoes,
+    // Qual das tres fontes produziu essas contagens. Sem isto nao da para
+    // saber se a comparacao da proxima recolha e legitima.
+    fonteCartoes,
     emRiscoDeCastigo,
+    // Castigos por cumprir, com a jornada a que se aplicam.
+    castigosActivos,
     // Campo proprio, deliberadamente fora de emRisco: isto e interpretacao
     // de noticias, nao um facto lido de uma tabela.
     duvidasIA: await duvidasSeNecessario(minhaEquipa.jogadores, jornada.numero, anterior, { log }),

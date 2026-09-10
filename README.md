@@ -4,239 +4,27 @@ Abres a app antes do fecho do mercado e vês quais dos **teus** jogadores não
 jogam esta jornada e por quem os podes trocar sem estourar o saldo. O bot do
 Telegram avisa-te sozinho quando alguém cai.
 
+O histórico das decisões — porque é que as fontes são estas, o que foi
+tentado e falhou — está em [DECISOES.md](DECISOES.md). Este ficheiro é só
+como pôr a andar e como usar.
+
 ## Arquitetura
 
 ```
 Railway (worker)                    Firebase                Netlify (PWA)
 ┌──────────────────────┐          ┌───────────┐          ┌──────────────┐
-│ cron 5ª/6ª/sáb       │          │ Firestore │◀─ lê ────│ React + Auth │
-│  ├ Liga Record (LR_TOKEN)  ─────▶│ boletins/ │          │  login Google│
-│  ├ Zerozero (scraping)   escreve │   {uid}   │          └──────────────┘
-│  ├ emparelha + sugere │          └───────────┘
-│  └ bot Telegram       │
+│ cron diário + 3ª/4ª  │          │ Firestore │◀─ lê ────│ React + Auth │
+│  ├ Liga Portugal API │  escreve │ boletins/ │          │  login Google│
+│  ├ Transfermarkt     │ ────────▶│   {uid}   │          └──────────────┘
+│  ├ emparelha + sugere│          │ plantel/  │◀─ escreve ──────┘
+│  └ bot Telegram      │          └───────────┘
 └──────────────────────┘
+
+A tua máquina ──▶ Liga Record (mercado, valores) ──▶ mesmo Firestore
 ```
 
-## O que o login Google faz — e o que não faz
-
-**Faz:** fecha a app a ti. Sem sessão Firebase não se vê nada, e as regras do
-Firestore só deixam ler o documento do teu próprio uid.
-
-**Não faz:** dar acesso à Liga Record. Mesmo sendo a mesma conta Google. O
-Firebase emite um token do Firebase, para o teu projeto; a Liga Record emite
-um token dela, no domínio dela. Nenhum dos dois serve para o outro. Mesmo que
-a Liga Record use "entrar com Google", o que sai daí é uma sessão *deles* que
-só existe no browser depois de fazeres login lá.
-
-Por isso o `LR_TOKEN` continua a ser capturado à mão (ver `CAPTURA.md`) e vive
-como variável de ambiente no Railway — nunca no browser, nunca no Firestore.
-
-## O login da Liga Record: porque é que desistimos dele
-
-Vale a pena registar isto, porque foi caro descobrir.
-
-O SSO do grupo Medialivre entrega a sessão aos sites por **iframe e
-postMessage entre domínios**. Está escrito no `SSOSiteVariables.js` deles:
-`SSORootIframe: "cofinasso-arbitration"`,
-`ThirPartySetSSOTokenCookie: "cof_tp_ssotoken"`. Nenhum cliente HTTP
-reproduz isso — exige JavaScript a correr e janelas a comunicar. O login em
-si funciona (as cookies do SSO aparecem), mas a entrega ao liga.record.pt
-nunca acontece.
-
-Podia resolver-se com um browser headless no Railway, mas seriam uns 400 MB
-de imagem e mais uma peça a partir-se.
-
-**E não é preciso.** A única coisa para que precisávamos do login era saber
-quais são os teus 23 jogadores. Todo o resto — mercado, valores, pontos,
-ronda, contador do fecho — vem do `playersearch.ashx` e das páginas públicas,
-sem sessão nenhuma.
-
-Como só tens **uma troca por ronda**, registar o plantel é um clique por
-semana. O separador Construir tem um botão "Gravar como o meu plantel": marcas
-os 23, gravas, e o worker passa a segui-los. Os valores e os pontos continuam
-a actualizar-se sozinhos, porque são lidos do mercado a cada recolha.
-
-A colecção `plantel` é a única que o browser pode escrever, e as regras
-limitam-na à lista de ids e ao saldo, no documento do próprio.
-
-## O que a captura revelou
-
-Três coisas que mudaram o projeto:
-
-**1. Não há API JSON.** É ASP.NET WebForms — Microsoft-IIS, `X-Aspnet-Version
-4.0.30319`, páginas `.aspx`, e os únicos XHR no separador Rede eram analytics.
-Os dados vêm renderizados no HTML. Tudo o que estava escrito à volta de
-`/api/players` foi deitado fora e substituído por scraping com cheerio.
-
-## Fonte de lesões: Transfermarkt
-
-O Zerozero não serviu. As 18 páginas de equipa carregavam sem erro e
-devolviam **zero ausências em todas** — não é que os selectores estivessem
-mal afinados, é que aquelas páginas não listam lesionados de todo. Toda essa
-abordagem foi construída em cima de um palpite meu que nunca verifiquei.
-
-A substituta é melhor em tudo:
-
-```
-https://www.transfermarkt.pt/liga-portugal/verletztespieler/wettbewerb/PO1
-```
-
-Uma tabela com a liga inteira: jogador, posição, clube, tipo de lesão, data
-prevista de regresso e valor de mercado. Um pedido em vez de dezoito, e a
-data de regresso é informação que o Zerozero nunca teve.
-
-## Castigos: calculados, não copiados
-
-Segunda fonte, para o que o Transfermarkt não cobre:
-
-```
-https://maisfutebol.iol.pt/liga/disciplina
-```
-
-Traz os cartões acumulados de cada jogador. A regra está confirmada no
-artigo 164.º do regulamento disciplinar da Liga: **uma série de cinco amarelos
-dá um jogo de suspensão**. Amarelos da Taça, Supertaça e Taça da Liga não
-contam, e a contagem não transita de época.
-
-**A armadilha, e porque é que ler a página não chega.** Aquela tabela mostra
-totais acumulados, não quem está castigado. Um jogador com 5 amarelos pode
-ter cumprido o castigo na jornada passada e estar disponível agora. Ler
-`amarelos % 5 === 0` como "castigado" produz falsos positivos — e um falso
-positivo aqui faz-te gastar a única troca da ronda a tirar um jogador que
-podia jogar.
-
-A app guarda os cartões de cada recolha e compara. O que interessa é quem
-**atravessou** um múltiplo de cinco desde a última vez, não quem lá está
-parado. Na primeira recolha não há com que comparar, e nesse caso os castigos
-vêm marcados com certeza baixa e o aviso de que podem já ter sido cumpridos.
-
-Também assinala quem está **a um amarelo do castigo** — não é ausência, é
-aviso: se comprares esse jogador hoje, é bem possível que falhe a ronda
-seguinte.
-
-**Vermelhos** dão suspensão certa, mas a duração é decidida pelo Conselho de
-Disciplina e não se calcula. A app marca como "pelo menos um jogo, duração
-por decidir".
-
-**O endpoint de pesquisa.** A página do plantel só mostra as primeiras filas;
-o resto vem por AJAX de:
-
-```
-GET liga.record.pt/common/services/playersearch.ashx
-      ?playerposition=GR|DF|MD|AV (ou vazio)
-      &name=&club=<nome em minúsculas>
-      &minval=500000&maxval=12000000
-      &order_by=points&order_dir=desc
-```
-
-Devolve **JSON**, não HTML:
-
-```json
-{"Id":42896,"IdPlayer":42896,"Name":"Pavlidis","NameClub":"Benfica",
- "PlayerPosition":"AV","InitialValue":6000000,"CurrentValue":6000000,
- "Points":0,"PercentTeams":"55,45","InTeam":true}
-```
-
-Com a posição vazia e o clube definido vem o plantel inteiro desse clube —
-18 pedidos cobrem a liga toda. Valores em euros, `PercentTeams` com vírgula
-decimal, posições `GR`/`DF`/`MD`/`AV`.
-
-Isto tornou o parser de HTML desnecessário para o mercado: nada de selectores
-para partir e os ids são os verdadeiros. O parser de cartões ficou só para a
-página do plantel, e como recurso caso mudem o formato.
-
-**`InTeam` não significa "está na minha equipa".** Vinha `true` para todos os
-jogadores do Benfica com o plantel vazio. Quem determina o plantel é a página
-`plantel.aspx`, pela ausência do botão COMPRAR.
-
-**A cadeia de login, tal como é.** Foi preciso descobri-la a passo:
-
-```
-POST aminhaconta.xl.pt/Api/Layers/Login      (email + password)
-  → {"errors":false,"RedirectUrl":"…/Redirects/INIT_SESSION?si=…"}
-GET  aminhaconta.xl.pt/Redirects/INIT_SESSION?si=…
-  → encaminha para liga.record.pt/user_login.ashx?token=…
-GET  liga.record.pt/user_login.ashx?token=…
-  → Set-Cookie: LigaRecordUser, cof_site_user
-```
-
-O salto do meio pode ser um 302, um meta refresh ou JavaScript — o worker
-trata dos três, porque não há forma de saber sem tentar.
-
-**2. A sessão é por cookie, não por token.** O login passa por
-`user_login.ashx?token=…` que devolve dois cookies, `LigaRecordUser` e
-`cof_site_user`. O segundo expirava em menos de doze horas. Ou seja: a captura
-manual que eu propus antes era inviável — terias de a fazer todos os dias.
-
-**3. O login é email + palavra-passe, e não é WebForms.** É o SSO do grupo
-Medialivre, servido como overlay: um `<form action="/Api/Layers/Login">` com
-campos `email`, `password` e três escondidos (`returnUrl`, `appID`,
-`hdnIsLayer`, `fbData`). Sem `__VIEWSTATE`, sem `__EVENTVALIDATION` — as
-páginas do jogo são WebForms, o login não é. Presumi mal e a primeira versão
-enviava campos que não existem.
-
-O botão do Google existe mas é alternativa, não obrigação. Isto muda a minha
-recomendação anterior: aqui o login automático é seguro de fazer, porque não
-passa pelo OAuth do Google e não põe a tua conta Google em risco.
-
-## Construtor de plantel
-
-Antes da 1ª ronda não há lesões para verificar — o teu plantel está vazio. O
-que serve nessa altura é o problema oposto: gastar bem os 40M.
-
-O separador **Construir** deixa-te fixar os jogadores que queres de certeza e
-sugere os restantes. Escolher os melhores um a um não funciona: gasta tudo nos
-primeiros e deixa-te sem dinheiro para completar as 23 vagas — no meu teste, a
-estratégia gananciosa nem chegava a preencher o plantel. Está resolvido por
-programação dinâmica exacta (os valores vêm em múltiplos de 50.000, o que dá
-800 degraus de orçamento), e verifiquei contra força bruta numa instância
-pequena: dá o mesmo resultado.
-
-Corre no browser em cerca de 40 ms, por isso podes ir fixando e desfixando
-jogadores e a sugestão refaz-se enquanto escreves. No Telegram é
-`/montar` ou `/montar Trubin, Otávio`.
-
-Duas ressalvas honestas: os pontos são os da época passada, não uma previsão,
-e o optimizador gasta o orçamento todo por defeito — se quiseres guardar folga
-para trocas futuras, fixa jogadores mais baratos.
-
-**Não há limite de jogadores por clube.** A FAQ da Liga Record diz
-expressamente que não existe essa limitação, ao contrário do Fantasy da Liga
-Portugal. Tentei implementar o limite na primeira versão e produzia plantéis
-impossíveis de completar, porque um filtro prévio não serve — obrigaria a uma
-dimensão extra na DP. Se eu estiver enganado sobre a regra, diz e faço-o em
-condições.
-
-## Regra do jogo que eu tinha errada
-
-A Liga Record dá **uma troca por ronda** — vendes um jogador, compras outro.
-Não são as transferências múltiplas do Fantasy da Liga Portugal. Orçamento de
-40M para 23 jogadores (3 GR, 8 DEF, 8 MED, 4 AVA), com seis trocas só na
-reabertura de fevereiro.
-
-O optimizador que eu tinha escrito procurava o melhor *conjunto* de trocas.
-Isso não existe neste jogo e a sugestão seria inaplicável. Está reescrito:
-ordena as trocas individuais possíveis, mostra a que mais rende, e diz-te
-quem fica no plantel sem hipótese de troca — porque esses tens de tirar do
-onze e cobrir com suplentes, que é uma decisão diferente.
-
-## Sobre automatizar o login
-
-A app tenta manter a sessão sozinha, por esta ordem: token em cache → token
-guardado no Firestore → **refresh token** → login com credenciais → desiste e
-avisa-te. O passo do refresh token é o que interessa: capturas uma vez, corres
-`npm run registar-sessao <access> <refresh>`, e a partir daí renova-se sozinho
-sem nunca mais precisar de browser nem de password.
-
-O worker reutiliza os cookies guardados no Firestore enquanto servirem, e só
-faz login novo quando a sessão morre. A password vive numa variável de ambiente
-no Railway e nunca chega ao browser.
-
-**O que continua fora de questão é automatizar o botão do Google.** Não é
-preciso — eles têm login próprio — e se um dia deixar de haver, o Google deteta
-browsers automatizados no fluxo OAuth e a resposta não é "falha o login": é
-pedir verificação ou marcar a conta como comprometida. Não vale a pena arriscar
-a conta que também é o teu email e o teu Firebase.
+O mercado da Liga Record é recolhido **da tua máquina**, não do Railway: a
+Liga Record bloqueia IPs de datacenter. Tudo o resto corre no Railway.
 
 ## Pôr a andar
 
@@ -252,88 +40,22 @@ seis `VITE_FIREBASE_*` em Environment variables. Em Firebase → Authentication 
 Settings → Authorized domains, acrescenta o domínio do Netlify, senão o popup
 de login rebenta.
 
-**4. Worker no Railway.** Root directory `worker`. Variáveis: `LR_TOKEN`,
+**4. Worker no Railway.** Root directory `worker`. Variáveis obrigatórias:
 `FIREBASE_SERVICE_ACCOUNT` (o JSON inteiro da conta de serviço), `UID_DONO`
-(o do passo 2), e opcionalmente `TELEGRAM_TOKEN`.
+(o do passo 2) e `AMBIENTE=prod`. Opcionalmente `TELEGRAM_TOKEN` e
+`TELEGRAM_CHAT_ID`. A lista completa e comentada está em
+`worker/.env.example`.
 
 **5. Telegram.** `/newbot` ao @BotFather, mete o token no Railway, manda
 `/start` ao bot. Ele responde com o chat id — mete-o em `TELEGRAM_CHAT_ID`
 e faz redeploy. Sem isso, qualquer pessoa que descubra o nome do bot vê o teu
 plantel.
 
-## Comandos do bot
+**6. Registar o plantel.** Abre a app, separador **Construir**, marca os teus
+23 jogadores e carrega em "Gravar como o meu plantel". Sem isto não há lesões
+a verificar — o worker não consegue ler o plantel do site (ver DECISOES.md).
 
-`/boletim` quem não joga · `/actualizar` força recolha · `/saldo` saldo e valor
-
-## O que ainda falta
-
-Os URLs das páginas em `worker/src/config/endpoints.js` ainda são palpites: da
-captura só sei o `gerir-equipas/default.aspx`, e os separadores Plantel e
-Comprar Equipas têm caminhos que não vi. Corre `npm run descobrir` — faz login,
-grava o HTML e imprime as tabelas de cada página. Cola-me o resumo e escrevo os
-parsers com os selectores certos.
-
-O mesmo para o Zerozero: `npm run inspect Benfica`.
-
-## Decisões, e porquê
-
-**Firestore em vez de JSON no repo.** Com login por utilizador já precisas de
-uma base de dados para separar quem vê o quê, e o `onSnapshot` dá-te
-actualização em tempo real de borla — o boletim muda no telemóvel sem refresh.
-
-**Escrita só pela conta de serviço.** As regras têm `allow write: if false`
-para todos. O browser nunca escreve. Se o token da Liga Record vazasse a
-partir do cliente estava tudo perdido, por isso ele nunca lá chega.
-
-## Fonte principal: a API oficial da Liga Portugal
-
-```
-GET ligaportugal.pt/api/v2/competition/top/players
-      ?competition=ligaportugalbetclic&season=20262027&size=400&statId=NNN
-```
-
-| statId | Estatística |
-|---|---|
-| 142 | Golos |
-| 3 | Assistências |
-| 10139 | Cartões amarelos |
-| 50 | Cartões vermelhos |
-
-JSON, da fonte autoritativa, com o `playerId` a permitir cruzar amarelos com
-vermelhos sem depender de nomes. Substituiu o raspar de HTML do maisfutebol e
-do zerozero, que ficam como alternativas se a API falhar.
-
-Duas coisas que só esta fonte dá: **assistências** (nenhuma das outras tinha)
-e o **nome completo** a par do curto, o que torna o emparelhamento com o
-plantel bastante mais fiável.
-
-O `size` é o parâmetro a vigiar: a página do site pede 20, que é o top que
-mostra. Nós pedimos 400, porque um jogador com 4 amarelos pode estar em 60.º
-lugar e ser exactamente o que interessa avisar. Se a API impuser um limite
-menor, o `npm run inspect-lp` mostra-o.
-
-**A época muda todos os anos** — `LP_EPOCA=20262027` no `.env`.
-
-## A Liga Record bloqueia servidores
-
-Do Railway, a ligação a `liga.record.pt` morre sem sequer se estabelecer —
-30 segundos sem resposta. Do mesmo contentor, a API da Liga Portugal responde
-em 0,19s. Não é lentidão nem timeout: é bloqueio de IPs de datacenter.
-
-Por isso a recolha está dividida:
-
-| Dados | Onde |
-|---|---|
-| Jornadas, classificação, golos, assistências, cartões, lesões | **Railway**, todos os dias |
-| Mercado: valores, pontuações, plantel | **A tua máquina**, quando precisares |
-
-A Liga Record deixou de ser fatal. Se não responder, o worker reaproveita o
-mercado da última recolha que conseguiu e actualiza tudo o resto. O boletim
-guarda `mercadoRecolhidoEm`, e tanto a app como a mensagem do Telegram dizem
-a idade dos valores — um plantel avaliado com preços de há uma semana leva a
-decisões erradas, e o pior seria não se saber que estão velhos.
-
-Para refrescar os valores, na tua máquina, com `AMBIENTE=prod` no `.env`:
+**7. Mercado.** Na tua máquina, com `AMBIENTE=prod` no `worker/.env`:
 
 ```cmd
 cd worker
@@ -343,31 +65,13 @@ npm run mercado
 Escreve no mesmo Firestore que o Railway lê. Os valores da Liga Record mudam
 à quarta, no máximo — uma vez por semana chega.
 
-## Análise da jornada
+## Comandos do bot
 
-Além de quem está de fora, a mensagem traz o que ajuda a montar o onze:
+`/boletim` estado actual · `/semana` recolhe e manda o resumo ·
+`/lesoes` lesionados da liga · `/actualizar` recolha completa ·
+`/montar` sugere plantel · `/saldo` saldo e valor da equipa
 
-| Bloco | Porquê |
-|---|---|
-| Jogos difíceis | Jogadores teus contra Benfica, Sporting, FC Porto ou Sp. Braga |
-| Sem jogo | Somam zero garantido — o erro mais caro e mais fácil de evitar |
-| Jogos favoráveis | Adversário com ataque fraco (para GR/DEF) ou defesa fraca (para MED/AVA) |
-| Casa / fora | Contagem simples |
-
-Tudo sai de dados que o boletim já tem: **zero pedidos novos**.
-
-Os quatro grandes são identificados por palavra distintiva — "benfica",
-"sporting", "porto", "braga" — e não pelo nome completo, porque cada fonte
-escreve o prefixo à sua maneira ("SC Braga", "Sp. Braga", "Braga").
-
-**Isto são heurísticas, não previsões.** "Joga contra o Benfica" reduz a
-probabilidade de pontos ofensivos, não a elimina — e um jogador do Benfica
-contra o último classificado é o caso espelhado, que o código também apanha.
-Os "jogos favoráveis" usam golos por jogo, e com quatro jornadas disputadas
-é amostra pequena: uma goleada distorce a média. A partir da jornada 10 vale
-bastante mais.
-
-**O calendário do bot.**
+## O calendário
 
 | Quando | O quê |
 |---|---|
@@ -381,45 +85,60 @@ A chamada paga à IA corre **só à sexta**. Correr três vezes por semana
 triplicava o custo para acrescentar pouco: as notícias de quarta ainda são as
 de terça.
 
-A diária é leve de propósito. Varrer 538 jogadores todos os dias para
-descobrir que ninguém se lesionou é desperdício, e mais uma oportunidade de
-sermos barrados. A completa corre à quarta porque é quando os valores da
-Liga Record mudam.
-
-A mensagem de sexta começa pela decisão — tens ou não tens jogadores de fora
-— e só depois dá o contexto da liga. Se não tiveres nenhum, diz-te isso numa
-linha e acabou.
-
-Comandos: `/boletim` estado actual · `/semana` recolhe e manda o resumo ·
-`/lesoes` lesionados da liga · `/actualizar` recolha completa ·
-`/montar` sugere plantel · `/saldo`.
-
 **Uma nota estratégica que não é sobre código.** Só tens uma troca por ronda,
 e as notícias de última hora saem nas conferências de sexta e sábado. Editares
-à quinta significa gastar a troca antes de saberes tudo. Os alertas tardios
-dizem-te o que mudou, mas se já usaste a troca só te resta mexer no onze e nos
-suplentes. É uma escolha tua entre decidir cedo e decidir informado — a app
-apoia as duas.
+à quinta significa gastar a troca antes de saberes tudo. É uma escolha tua
+entre decidir cedo e decidir informado — a app apoia as duas.
 
-**Aborta em vez de escrever vazio.** Se o Zerozero mudar o HTML, o parser
-devolve zero ausências — que na app parece "ninguém está lesionado". É a falha
-mais perigosa aqui porque parece sucesso. O worker recusa gravar um boletim com
-menos de 8 ausências, mantém o anterior, e manda-te o erro pelo Telegram.
+## As duas jornadas
 
-## Custos, sem rodeios
+Isto está escrito aqui porque já deu um bug e vai voltar a confundir:
 
-Netlify e Firebase ficam dentro do plano gratuito à vontade nesta escala. O
-**Railway já não tem tier gratuito permanente** — é crédito de teste e depois
-o Hobby, cerca de 5 USD/mês. Se não quiseres pagar, o worker corre na mesma em
-GitHub Actions com o mesmo código (só o `servidor.js` fica de fora) e o bot
-passa a só enviar mensagens em vez de responder a comandos. Diz-me e mando essa
-variante.
+- **`jornada.numero` é sempre a jornada POR JOGAR.** É o que o cabeçalho da
+  app mostra e o que o bot diz.
+- A **classificação** é pedida à API para `numero - 1`, a última já disputada.
+- Os **jogos** são pedidos para `numero` e `numero + 1`.
+
+Se o cabeçalho disser "Jornada 6" e o separador Campeonato mostrar a 7 como
+"Esta jornada", é este alinhamento que partiu.
+
+## Testes
+
+```cmd
+cd worker
+npm run teste
+```
+
+Corre a verificação de módulos, os testes de castigos e os do optimizador de
+plantel. Os testes de castigos reproduzem bugs que existiram — se algum
+falhar, o bug voltou.
+
+## Regras do jogo
+
+Orçamento de 40M para 23 jogadores (3 GR, 8 DEF, 8 MED, 4 AVA). **Uma troca
+por ronda** — vendes um jogador, compras outro. Seis trocas só na reabertura
+de fevereiro. Não há limite de jogadores por clube (a FAQ da Liga Record
+di-lo expressamente, ao contrário do Fantasy da Liga Portugal).
+
+Castigos: uma série de cinco amarelos dá um jogo de suspensão (artigo 164.º
+do regulamento disciplinar da Liga). Amarelos da Taça, Supertaça e Taça da
+Liga não contam, e a contagem não transita de época.
 
 ## Manutenção
 
 Isto é scraping: parte. Início de época, confirmar os ids em
-`config/equipas.js`. Quando o Zerozero mexer no layout, o bot avisa-te e usas
-`npm run inspect`. Quando o `LR_TOKEN` expirar, dá 401 e renovas no Railway.
+`worker/src/config/equipas.js` e a `LP_EPOCA` no `.env`. Quando uma fonte
+mexer no layout, o bot avisa-te e usas o `npm run inspect-*` correspondente:
+
+| Comando | Fonte |
+|---|---|
+| `npm run inspect-lp` | API da Liga Portugal (golos, cartões) |
+| `npm run inspect-lp-tabela` | API da Liga Portugal (classificação) |
+| `npm run inspect-tm` | Transfermarkt (lesões) |
+| `npm run inspect-maisfutebol` | Maisfutebol (disciplina, alternativa) |
+| `npm run inspect-zerozero` | Zerozero (alternativa) |
+| `npm run inspect-jornada` | Detecção do número da jornada |
+| `npm run inspect` | Endpoint de pesquisa da Liga Record |
 
 ## Aviso
 

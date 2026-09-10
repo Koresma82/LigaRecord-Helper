@@ -35,7 +35,11 @@ export function resumoJornada(boletim) {
   if (fora.length) {
     linhas.push('', `*Não jogam (${fora.length})*`);
     for (const j of fora) {
-      linhas.push(`• ${j.nome} — ${ROTULO[j.ausencia.tipo] ?? 'fora'}`);
+      // Um vermelho suspende pelo menos um jogo, mas quantos e decidido pelo
+      // Conselho de Disciplina. Dizer so "castigado" sugeria uma certeza
+      // sobre a duracao que nao temos.
+      const duracao = j.ausencia.duracaoIncerta ? ' (duração por decidir)' : '';
+      linhas.push(`• ${j.nome} — ${ROTULO[j.ausencia.tipo] ?? 'fora'}${duracao}`);
     }
   }
 
@@ -184,7 +188,8 @@ export function resumoSemanal(boletim) {
       const regresso = j.ausencia.dataRegresso
         ? `, regresso ${j.ausencia.dataRegresso}`
         : '';
-      linhas.push(`• *${j.nome}* (${j.equipa}) — ${motivo}${regresso}`);
+      const duracao = j.ausencia.duracaoIncerta ? ', duração por decidir' : '';
+      linhas.push(`• *${j.nome}* (${j.equipa}) — ${motivo}${regresso}${duracao}`);
     }
   } else {
     linhas.push('', '✅ *Nenhum dos teus jogadores está de fora.*');

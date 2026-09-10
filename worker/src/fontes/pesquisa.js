@@ -164,7 +164,7 @@ export async function descobrirCaminhoPesquisa({ log = () => {} } = {}) {
     `O ${NOME_HANDLER} nao devolveu jogadores em nenhuma tentativa.\n` +
       'O caminho /common/services/ esta confirmado, por isso o problema nao\n' +
       'e a pasta — e o que a resposta traz.\n\n' +
-      'Corre `npm run testar-pesquisa`: bate no endpoint com varias\n' +
+      'Corre `npm run inspect`: bate no endpoint com varias\n' +
       'combinacoes de cabecalhos e parametros e mostra o que volta.'
   );
 }
@@ -266,7 +266,7 @@ export async function todosOsJogadores({ log = () => {}, clubes } = {}) {
   if (!lista.length) {
     throw new Error(
       'Nao consegui nem por posicao nem descobrir os clubes.\n' +
-        'Corre `npm run testar-pesquisa` e ve o que o endpoint devolve.'
+        'Corre `npm run inspect` e ve o que o endpoint devolve.'
     );
   }
 
