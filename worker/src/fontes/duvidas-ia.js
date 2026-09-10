@@ -42,15 +42,46 @@ import { criarIndice, procurar } from '../emparelhar-jogador.js';
 const MODELO = process.env.IA_MODELO ?? 'claude-sonnet-5';
 const URL_API = 'https://api.anthropic.com/v1/messages';
 
-const INSTRUCOES = `Es um assistente que investiga noticias de futebol portugues.
+// -----------------------------------------------------------------------------
+// DUAS FALHAS REAIS APANHADAS EM PRODUCAO, e o porque de cada correccao.
+//
+// 1. NOTICIA DA EPOCA ERRADA.
+//
+//    O modelo devolveu o Zaidu como lesionado citando um artigo do
+//    Soccerway com o TITULO "Ausencias da 6.a jornada da Liga Portugal" —
+//    parecia perfeito. Mas o artigo era de 19.09.2024, duas epocas antes da
+//    actual. Sites de futebol republicam este genero de peca todas as
+//    epocas com o MESMO titulo generico; uma pesquisa por
+//    "ausencias jornada 6" da liga sem mais contexto apanha qualquer uma
+//    delas, e o titulo por si so nao distingue.
+//
+//    A correccao tem duas camadas. Ao modelo passamos a data de hoje e a
+//    epoca actual, e uma instrucao explicita para confirmar a data do
+//    artigo antes de o usar. Mas nao confiamos so nisso — pedimos tambem
+//    que reporte essa data num campo `dataNoticia`, e o CODIGO (nao o
+//    modelo) rejeita qualquer achado cuja data seja claramente de outra
+//    epoca. Um modelo a interpretar noticias erra; uma comparacao de datas
+//    no codigo nao.
+//
+// 2. LESAO CONHECIDA QUE NAO APARECEU.
+//
+//    O Liziero (Nacional) estava lesionado e nao foi apanhado, apesar de
+//    haver noticia facil de encontrar. A pesquisa generica "ausencias da
+//    jornada" tende a devolver so os casos que fazem manchete — os clubes
+//    grandes. Um jogador de um emblema mais pequeno fica de fora se a
+//    pesquisa nao for, tambem, jogador a jogador.
+// -----------------------------------------------------------------------------
 
-Vais receber a lista de jogadores da equipa de fantasy de um utilizador, na
-Liga Portugal, o numero da proxima jornada, e a lista de jogadores que a
-aplicacao JA sabe que estao de fora.
 
-Pesquisa noticias RECENTES (ultimos 10 dias) em portugues sobre estes
-jogadores e os seus clubes. O objectivo e responder a uma pergunta so:
-algum destes jogadores corre o risco de nao jogar a proxima jornada?
+const INSTRUCOES_BASE = `Es um assistente que investiga noticias de futebol portugues.
+
+Vais receber a DATA DE HOJE, a EPOCA actual da Liga Portugal, a lista de
+jogadores da equipa de fantasy de um utilizador, o numero da proxima
+jornada, e a lista de jogadores que a aplicacao JA sabe que estao de fora.
+
+Pesquisa noticias RECENTES em portugues sobre estes jogadores e os seus
+clubes. O objectivo e responder a uma pergunta so: algum destes jogadores
+corre o risco de nao jogar a proxima jornada?
 
 Procura os dois tipos de sinal:
 
@@ -63,6 +94,32 @@ Procura os dois tipos de sinal:
    anunciada para jogo europeu, castigo interno, rumor de transferencia,
    declaracoes ambiguas do treinador sobre a disponibilidade. Marca tipo
    "duvida".
+
+COMO PESQUISAR, PARA NAO PERDERES CASOS:
+- Uma pesquisa generica do tipo "ausencias jornada X liga portugal" NAO
+  chega. Sites de futebol dao destaque aos clubes grandes; um jogador de
+  um emblema mais pequeno so aparece se procurares o NOME DELE
+  directamente. Para jogadores de clubes que nao sejam os quatro grandes,
+  faz pelo menos uma pesquisa pelo nome do jogador mais o nome do clube.
+- Um titulo generico do tipo "Ausencias da jornada X da Liga Portugal" e
+  frequentemente um FORMATO RECORRENTE que sites como o Flashscore ou o
+  Soccerway publicam TODAS AS EPOCAS com o mesmo titulo. O titulo, por si
+  so, nao prova que o artigo e desta epoca. Confirma sempre a data.
+
+SOBRE DATAS — ISTO E CRITICO E JA CAUSOU UM ERRO REAL:
+- So podes usar uma noticia se conseguires confirmar que foi publicada ou
+  actualizada DENTRO DOS ULTIMOS 14 DIAS a contar da data de hoje que te foi
+  dada, E que se refere a EPOCA actual que te foi dada.
+- A maioria das paginas mostra a data de publicacao ou de actualizacao
+  perto do titulo. Le-a. Se a pagina disser uma data de uma epoca anterior
+  (por exemplo, ha dois anos), ou se e um artigo sobre uma jornada 6 de
+  uma epoca diferente da actual, DESCARTA-O — nao serve, mesmo que o
+  jogador e a lesao pareçam correctos. Pode ser um evento antigo que nao
+  tem nada a ver com agora.
+- Se nao conseguires determinar a data do artigo com confianca, usa o
+  artigo na mesma SO se o confianca for "baixa" e digas isso no motivo.
+- Preenche sempre "dataNoticia" com a data que encontraste no formato
+  AAAA-MM-DD. Se nao conseguires determinar a data, escreve null.
 
 REGRAS QUE NAO PODES QUEBRAR:
 - So incluis um jogador se encontrares uma noticia concreta que o justifique.
@@ -79,7 +136,7 @@ REGRAS QUE NAO PODES QUEBRAR:
 Responde APENAS com JSON valido, sem markdown, sem texto antes ou depois,
 neste formato exacto:
 
-{"achados":[{"nome":"...","equipa":"...","tipo":"lesao|duvida","motivo":"...","confianca":"alta|media|baixa","fonte":"https://..."}]}
+{"achados":[{"nome":"...","equipa":"...","tipo":"lesao|duvida","motivo":"...","confianca":"alta|media|baixa","fonte":"https://...","dataNoticia":"AAAA-MM-DD ou null"}]}
 
 O "motivo" e uma frase curta em portugues de Portugal, com o facto concreto
 (por exemplo: "lesao no adutor confirmada pelo clube, varias semanas de
@@ -88,6 +145,15 @@ paragem").
 Depois de pesquisares, a tua ULTIMA mensagem tem de ser so o objecto JSON.
 Nao escrevas um resumo do que encontraste, nao expliques o que pesquisaste,
 nao uses blocos de codigo. So o JSON.`;
+
+// A epoca legivel para o prompt: "20262027" -> "2026/2027". Reaproveita a
+// mesma variavel que o resto do worker usa para pedir dados a API da Liga
+// Portugal, para as duas fontes nunca poderem discordar sobre que epoca e
+// "a actual".
+function epocaLegivel() {
+  const bruta = process.env.LP_EPOCA ?? '20262027';
+  return bruta.length === 8 ? `${bruta.slice(0, 4)}/${bruta.slice(4)}` : bruta;
+}
 
 function extrairJSON(texto) {
   const limpo = texto.replace(/```json|```/g, '').trim();
@@ -106,7 +172,24 @@ function extrairJSON(texto) {
 // Record diz "Zaidu"; o achado certo era deitado fora por causa do apelido.
 // Usamos o mesmo `procurar` que liga o plantel as outras fontes, que ja sabe
 // lidar com nomes curtos, completos e acentos — sempre dentro do mesmo clube.
-function validar(bruto, plantel) {
+// Rejeita mecanicamente um achado cuja data seja claramente de outra epoca.
+// Isto NAO substitui a instrucao ao modelo — e a segunda camada, para o caso
+// de o modelo se enganar mesmo assim, como aconteceu com o artigo do
+// Soccerway de ha duas epocas. Uma comparacao de datas no codigo nao erra.
+//
+// Deliberadamente GENEROSA: so rejeita o que e inequivocamente velho (mais
+// de 45 dias) ou impossivel (no futuro). Datas que o modelo nao conseguiu
+// determinar (null) ou que estao dentro da margem ficam — a intencao e
+// apanhar o erro obvio da epoca trocada, nao filtrar tudo ao milimetro.
+export function dataEProvavelmenteActual(dataNoticia, hoje) {
+  if (!dataNoticia) return true;
+  const d = new Date(dataNoticia);
+  if (Number.isNaN(d.getTime())) return true;
+  const diasDeDiferenca = (hoje.getTime() - d.getTime()) / 86_400_000;
+  return diasDeDiferenca >= -2 && diasDeDiferenca <= 45;
+}
+
+export function validar(bruto, plantel, { hoje = new Date() } = {}) {
   const indice = criarIndice(plantel);
 
   const lista = Array.isArray(bruto?.achados)
@@ -119,6 +202,9 @@ function validar(bruto, plantel) {
 
   return lista
     .filter((d) => d && typeof d.nome === 'string' && typeof d.motivo === 'string')
+    // O artigo do Soccerway de 2024: titulo perfeito, jogador certo, epoca
+    // errada. Esta e a linha que o teria apanhado.
+    .filter((d) => dataEProvavelmenteActual(d.dataNoticia, hoje))
     .map((d) => {
       const jogador = procurar(indice, d.nome, d.equipa ?? '');
       return jogador ? { d, jogador } : null;
@@ -137,6 +223,7 @@ function validar(bruto, plantel) {
       confianca: ['alta', 'media', 'baixa'].includes(d.confianca) ? d.confianca : 'baixa',
       // Sem URL nao ha como confirmar, e um achado sem fonte nao vale nada.
       fonte: typeof d.fonte === 'string' && d.fonte.startsWith('http') ? d.fonte : null,
+      dataNoticia: typeof d.dataNoticia === 'string' ? d.dataNoticia : null,
     }))
     .filter((d) => d.fonte);
 }
@@ -165,6 +252,15 @@ export async function duvidasDaJornada(plantel, jornada, { log = () => {}, jaCon
     return { jornada, estado: 'sem-plantel', razao: 'não há plantel registado', achados: [], duvidas: [] };
   }
 
+  const hoje = new Date();
+  // Formato longo em portugues, para o modelo nao ter de adivinhar o
+  // separador da data ("10/9" podia ser 10 de Setembro ou 9 de Outubro).
+  const hojeLegivel = hoje.toLocaleDateString('pt-PT', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+
   const lista = plantel.map((j) => `- ${j.nome} (${j.equipa})`).join('\n');
 
   const conhecidos = jaConhecidos.length
@@ -180,6 +276,8 @@ export async function duvidasDaJornada(plantel, jornada, { log = () => {}, jaCon
     {
       role: 'user',
       content:
+        `Data de hoje: ${hojeLegivel} (${hoje.toISOString().slice(0, 10)}).\n` +
+        `Epoca actual da Liga Portugal: ${epocaLegivel()}.\n` +
         `Proxima jornada: ${jornada}.\n\nPlantel:\n${lista}\n\n` +
         `A aplicacao ja sabe que estes estao de fora (nao os repitas):\n${conhecidos}`,
     },
@@ -187,7 +285,10 @@ export async function duvidasDaJornada(plantel, jornada, { log = () => {}, jaCon
 
   let dados = null;
   let voltas = 0;
-  const MAX_VOLTAS = 5;
+  // 8, nao 5: verificar 23 jogadores individuais (o Liziero so foi
+  // encontrado assim, nao por uma pesquisa generica da jornada) precisa de
+  // mais idas e voltas de pesquisa do que uma so pergunta agregada.
+  const MAX_VOLTAS = 8;
 
   while (voltas < MAX_VOLTAS) {
     voltas += 1;
@@ -202,7 +303,7 @@ export async function duvidasDaJornada(plantel, jornada, { log = () => {}, jaCon
       body: JSON.stringify({
         model: MODELO,
         max_tokens: 4000,
-        system: INSTRUCOES,
+        system: INSTRUCOES_BASE,
         tools: [{ type: 'web_search_20250305', name: 'web_search' }],
         messages: mensagens,
       }),
@@ -242,7 +343,7 @@ export async function duvidasDaJornada(plantel, jornada, { log = () => {}, jaCon
     );
   }
 
-  const achados = validar(bruto, plantel);
+  const achados = validar(bruto, plantel, { hoje });
   const lesoes = achados.filter((d) => d.tipo === 'lesao');
 
   const custo = dados.usage

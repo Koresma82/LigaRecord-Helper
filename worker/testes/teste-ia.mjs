@@ -1,5 +1,6 @@
 import { criarIndice, procurar } from '../src/emparelhar-jogador.js';
 import { resumoSemanal } from '../src/bot/mensagens.js';
+import { validar, dataEProvavelmenteActual } from '../src/fontes/duvidas-ia.js';
 
 // -----------------------------------------------------------------------------
 // Testes da verificacao por IA. Nenhum chama a API — testam o que rodeia a
@@ -222,6 +223,90 @@ const plantel = [
     semEscape(texto).includes('Zaidu_Sanusi'),
     'o texto original continua legível depois do Telegram remover o escape'
   );
+}
+
+// --- 6. O CASO REAL: artigo com titulo perfeito, epoca errada --------------
+//
+// Aconteceu em producao: o Zaidu apareceu como lesionado citando um artigo
+// do Soccerway sobre "Ausencias da 6.a jornada da Liga Portugal" — titulo
+// impecavel — mas datado de 19.09.2024, duas epocas antes da actual. O
+// codigo tem de rejeitar isto sozinho, mesmo que o modelo se engane outra
+// vez da mesma forma.
+{
+  const hoje = new Date('2026-09-10');
+
+  ok(
+    dataEProvavelmenteActual('2026-09-08', hoje) === true,
+    'notícia de há dois dias passa'
+  );
+  ok(
+    dataEProvavelmenteActual('2024-09-19', hoje) === false,
+    'o artigo real do Soccerway (2024, duas épocas antes) é rejeitado'
+  );
+  ok(
+    dataEProvavelmenteActual(null, hoje) === true,
+    'sem data determinada, o código não penaliza — não sabe, não filtra'
+  );
+  ok(
+    dataEProvavelmenteActual('data esquisita', hoje) === true,
+    'uma data que não dá para interpretar não é tratada como inválida'
+  );
+  ok(
+    dataEProvavelmenteActual('2026-11-01', hoje) === false,
+    'uma data no futuro (impossível) também é rejeitada'
+  );
+
+  // De ponta a ponta, atraves do validar() a serio — nao uma copia da logica.
+  const plantel = [{ nome: 'Zaidu', equipa: 'FC Porto', posicao: 'DEF' }];
+  const brutoAntigo = {
+    achados: [
+      {
+        nome: 'Zaidu',
+        equipa: 'FC Porto',
+        tipo: 'lesao',
+        motivo: 'Lesão no adutor, ausente na 6.ª jornada',
+        confianca: 'alta',
+        fonte: 'https://pt.soccerway.com/noticias/ausencias-6-jornada',
+        dataNoticia: '2024-09-19',
+      },
+    ],
+  };
+  const resultado = validar(brutoAntigo, plantel, { hoje });
+  ok(resultado.length === 0, 'de ponta a ponta: o achado de 2024 nunca chega ao boletim');
+
+  const brutoActual = {
+    achados: [{ ...brutoAntigo.achados[0], dataNoticia: '2026-09-08' }],
+  };
+  ok(
+    validar(brutoActual, plantel, { hoje }).length === 1,
+    'o mesmo achado, com data actual, passa normalmente'
+  );
+}
+
+// --- 7. A data do artigo aparece na mensagem, quando existe -----------------
+{
+  const texto = resumoSemanal({
+    jornada: { numero: 6 },
+    equipa: { plantel: [{ nome: 'Zaidu', equipa: 'FC Porto', posicao: 'DEF' }] },
+    emRisco: [],
+    ligaInteira: [],
+    duvidasIA: {
+      jornada: 6,
+      estado: 'ok',
+      achados: [
+        {
+          nome: 'Zaidu',
+          equipa: 'FC Porto',
+          tipo: 'lesao',
+          motivo: 'Lesão no adutor',
+          confianca: 'alta',
+          fonte: 'https://exemplo.pt/zaidu',
+          dataNoticia: '2026-09-08',
+        },
+      ],
+    },
+  });
+  ok(texto.includes('2026-09-08'), 'a data da notícia aparece na mensagem, para se poder desconfiar dela');
 }
 
 console.log('');

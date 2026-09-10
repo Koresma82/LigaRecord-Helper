@@ -246,7 +246,11 @@ function blocoIA(boletim) {
     // d.nome vem do plantel (controlado); nomeNaNoticia, motivo e fonte vem
     // do modelo a ler noticias — nao controlado, tem de ser escapado.
     const alias = d.nomeNaNoticia ? ` _(nas notícias: ${escaparMD(d.nomeNaNoticia)})_` : '';
-    const out = [`• *${d.nome}*${alias} — ${escaparMD(d.motivo)}${confianca}`];
+    // A data do artigo, quando o modelo a conseguiu determinar. Sem isto so
+    // tu podias apanhar um artigo velho, abrindo a fonte um a um — com a
+    // data à frente, salta logo à vista.
+    const data = d.dataNoticia ? ` _(${escaparMD(d.dataNoticia)})_` : '';
+    const out = [`• *${d.nome}*${alias} — ${escaparMD(d.motivo)}${confianca}${data}`];
     if (d.fonte) out.push(`  ${escaparMD(d.fonte)}`);
     return out;
   };

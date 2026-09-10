@@ -262,6 +262,39 @@ Firestore só deixam ler o documento do teu próprio uid.
 Firebase emite um token do Firebase, para o teu projeto; a Liga Record emite
 um token dela, no domínio dela. Nenhum dos dois serve para o outro.
 
+## Verificação por IA: artigos de outra época passam por perfeitos
+
+Aconteceu em produção. O modelo devolveu o Zaidu como lesionado, citando um
+artigo do Soccerway com o título "Ausências da 6.ª jornada da Liga
+Portugal" — jogador certo, lesão certa, título perfeito. O artigo era de
+19.09.2024, duas épocas antes da actual.
+
+Sites de futebol republicam este tipo de peça todas as épocas com o mesmo
+título genérico. Uma pesquisa por "ausências jornada 6 liga portugal" sem
+mais contexto apanha qualquer uma delas, e o título sozinho não distingue.
+
+A correcção tem duas camadas, porque confiar só no modelo já falhou uma vez:
+
+1. **Ao modelo** passamos agora a data de hoje e a época actual (a mesma
+   `LP_EPOCA` que o resto do worker usa), com instrução explícita para
+   confirmar a data do artigo antes de o usar, e para reportá-la no campo
+   `dataNoticia`.
+2. **No código**, `dataEProvavelmenteActual` em `duvidas-ia.js` rejeita
+   mecanicamente qualquer achado datado de fora de uma janela generosa (-2
+   a +45 dias). Deliberadamente larga: o objectivo é apanhar o erro óbvio
+   de época trocada, não filtrar ao milímetro. Uma data que o modelo não
+   conseguiu determinar não é penalizada — não sabe, não filtra.
+
+A data, quando existe, aparece agora na mensagem do Telegram a par do
+motivo — para poderes desconfiar tu também, sem teres de abrir a fonte.
+
+Ligado a isto: uma pesquisa genérica da jornada tende a só apanhar os
+clubes grandes. O Liziero (Nacional) estava lesionado e não foi apanhado
+por essa via. O prompt passou a pedir explicitamente uma pesquisa pelo
+nome de cada jogador, não só pela ronda em bloco, e o limite de idas e
+vindas à pesquisa subiu de 5 para 8 — verificar 23 jogadores um a um
+precisa de mais tentativas do que uma pergunta agregada.
+
 ## Custos, sem rodeios
 
 Netlify e Firebase ficam dentro do plano gratuito à vontade nesta escala. O

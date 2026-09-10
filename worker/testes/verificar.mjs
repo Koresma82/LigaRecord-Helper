@@ -24,7 +24,7 @@ const ESPERADO = {
   '../src/fontes/zerozero.js': ['marcadoresDaLiga', 'disciplinaDaLiga', 'jogosDaJornada', 'jogosDeVariasJornadas', 'jornadaNoZerozero', 'classificacaoDaLiga', 'lerClassificacaoZZ'],
   '../src/fontes/transfermarkt.js': ['lesoesDaLiga', 'lerTabelaLesoes'],
   '../src/tarefas.js': ['enviarResumoSemanal'],
-  '../src/fontes/duvidas-ia.js': ['duvidasDaJornada'],
+  '../src/fontes/duvidas-ia.js': ['duvidasDaJornada', 'validar', 'dataEProvavelmenteActual'],
   '../src/emparelhar-jogador.js': ['criarIndice', 'procurar'],
   '../src/fontes/maisfutebol.js': ['disciplinaDaLiga', 'lerTabelaDisciplina'],
   '../src/fontes/disciplina.js': ['castigosPorAcumulacao', 'chaveDisciplina'],
