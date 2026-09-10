@@ -191,6 +191,20 @@ export function resumoPlantel(r) {
 // nas substituicoes sugeridas. A troca da ronda e uma so; nao se gasta com
 // base num palpite de modelo. O que isto faz e dizer-te onde ir confirmar.
 // -----------------------------------------------------------------------------
+// Escapa os caracteres que o Markdown "legacy" do Telegram usa como
+// formatacao: _ * ` [. Sem isto, um destes caracteres vindo de texto que
+// nao controlamos — as noticias que a IA le, um URL, a mensagem de um erro
+// da API — pode fechar ou abrir uma formatacao a meio da mensagem, e o
+// Telegram recusa a mensagem INTEIRA com "can't parse entities". Ja
+// aconteceu: o /actualizar falhou por causa de um caracter algures dentro
+// do bloco de noticias.
+//
+// Escapado, o caracter aparece tal e qual na mensagem — o Telegram remove
+// a barra ao mostrar, nao fica um "\_" visivel.
+function escaparMD(texto) {
+  return String(texto ?? '').replace(/([_*`[])/g, '\\$1');
+}
+
 function blocoIA(boletim) {
   const ia = boletim.duvidasIA;
   if (!ia) return [];
@@ -206,7 +220,8 @@ function blocoIA(boletim) {
       'sem-plantel': 'não há plantel registado para verificar',
       falhou: 'a verificação nas notícias falhou',
     };
-    const razao = ia.razao ? ` (${ia.razao})` : '';
+    // ia.razao pode vir do corpo de um erro da API — texto que nao controlamos.
+    const razao = ia.razao ? ` (${escaparMD(ia.razao)})` : '';
     return [
       '',
       `⚠️ _${explicacao[ia.estado] ?? 'verificação nas notícias indisponível'}${razao}._`,
@@ -228,9 +243,11 @@ function blocoIA(boletim) {
     const confianca = d.confianca === 'alta' ? '' : ` _(confiança ${d.confianca})_`;
     // O nome das noticias so aparece quando difere do do plantel: e o que
     // te permite procurar a noticia sem ficares a pensar se e a mesma pessoa.
-    const alias = d.nomeNaNoticia ? ` _(nas notícias: ${d.nomeNaNoticia})_` : '';
-    const out = [`• *${d.nome}*${alias} — ${d.motivo}${confianca}`];
-    if (d.fonte) out.push(`  ${d.fonte}`);
+    // d.nome vem do plantel (controlado); nomeNaNoticia, motivo e fonte vem
+    // do modelo a ler noticias — nao controlado, tem de ser escapado.
+    const alias = d.nomeNaNoticia ? ` _(nas notícias: ${escaparMD(d.nomeNaNoticia)})_` : '';
+    const out = [`• *${d.nome}*${alias} — ${escaparMD(d.motivo)}${confianca}`];
+    if (d.fonte) out.push(`  ${escaparMD(d.fonte)}`);
     return out;
   };
 
