@@ -295,6 +295,51 @@ nome de cada jogador, não só pela ronda em bloco, e o limite de idas e
 vindas à pesquisa subiu de 5 para 8 — verificar 23 jogadores um a um
 precisa de mais tentativas do que uma pergunta agregada.
 
+## Jogos da jornada: o boletim anterior não chegava
+
+Aconteceu em produção. A jornada 6 tinha um jogo marcado (FC Porto - Casa
+Pia), mas nessa recolha a fonte não devolveu nenhum jogo para ela — só para
+a jornada 7, pedida no mesmo pedido. O `adversarios` ficou vazio, e os 23
+jogadores do plantel apareceram todos como "sem jogo esta jornada, tira-os
+do onze". Um conselho activamente errado, não só uma lacuna.
+
+Duas causas, corrigidas as duas:
+
+**Não havia guarda nenhuma.** Ao contrário das lesões (`MINIMO_PLAUSIVEL`)
+e do mercado (reaproveita o anterior se a Liga Record não responder), uma
+lista de jogos vazia era aceite calada.
+
+**O único sítio de reserva era o boletim anterior**, que é uma fotografia
+de uma recolha só. Se a jornada faltar duas recolhas seguidas, a segunda já
+não tem onde a ir buscar — o "anterior" que ela vê já é o da recolha em que
+também faltou.
+
+A correcção tem três níveis, do mais barato ao mais duradouro:
+
+1. Se a recolha trouxe menos de 4 jogos para a jornada por jogar (uma
+   jornada tem 9), não confia.
+2. Tenta o boletim anterior — só se era sobre a mesma jornada.
+3. Tenta a colecção `jogosPorJornada` no Firestore, escrita sempre que uma
+   recolha traz jogos bons e nunca apagada por uma que traga poucos. É a
+   diferença entre "a última fotografia" e "o que já soubemos alguma vez" —
+   sobrevive a quantas recolhas falhadas seguidas for preciso.
+
+Se nem isso houver, o boletim leva um sinalizador (`jogosIndisponiveis`) e
+a mensagem diz *"Não consegui confirmar os jogos desta jornada"* em vez de
+concluir "sem jogo" a partir de um buraco de dados.
+
+Um cuidado à parte: quando só a jornada por jogar falha mas a seguinte vem
+bem no mesmo pedido (foi o caso real), o fallback da primeira não pode
+apagar a segunda. `unirJogos()` em `jogos-fallback.js` junta as duas sem
+duplicar — antes disso, o código guardava sempre a lista inteira OU o
+fallback, nunca os dois juntos, e uma jornada boa perdia-se por causa da
+outra que falhou.
+
+A colecção `jogosPorJornada` não tem regra própria no `firestore.rules` —
+não precisa. É lida e escrita só pela conta de serviço do worker, que
+ignora as regras; o "nada mais é acessível" do fim do ficheiro já a fecha
+ao browser, tal como fecha `segredos`.
+
 ## Custos, sem rodeios
 
 Netlify e Firebase ficam dentro do plano gratuito à vontade nesta escala. O

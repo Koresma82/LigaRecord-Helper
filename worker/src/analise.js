@@ -178,6 +178,17 @@ export function analisarJornada(boletim) {
 // -----------------------------------------------------------------------------
 
 export function blocoAnalise(boletim) {
+  // Sem jogos fiaveis, nao ha analise possivel — e sobretudo, "sem jogo
+  // esta jornada" para TODA a gente seria a conclusao errada, nao uma
+  // conclusao cautelosa. Ja aconteceu: a fonte falhou, a lista de jogos
+  // chegou vazia, e a mensagem disse para tirar os 23 jogadores do onze.
+  if (boletim?.jogosIndisponiveis) {
+    return (
+      '\n⚠️ _Não consegui confirmar os jogos desta jornada — sem eles, não ' +
+      'dá para saber quem joga contra quem. Confirma o calendário à mão._'
+    );
+  }
+
   const a = analisarJornada(boletim);
   const linhas = [];
 

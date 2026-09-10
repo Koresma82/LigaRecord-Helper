@@ -250,7 +250,10 @@ function blocoIA(boletim) {
     // tu podias apanhar um artigo velho, abrindo a fonte um a um — com a
     // data à frente, salta logo à vista.
     const data = d.dataNoticia ? ` _(${escaparMD(d.dataNoticia)})_` : '';
-    const out = [`• *${d.nome}*${alias} — ${escaparMD(d.motivo)}${confianca}${data}`];
+    // Mesmo estilo do resto da mensagem: "Nome (POS)". So aparece quando a
+    // temos — um achado antigo, gravado antes desta correccao, nao tem.
+    const posicao = d.posicao ? ` (${d.posicao})` : '';
+    const out = [`• *${d.nome}*${posicao}${alias} — ${escaparMD(d.motivo)}${confianca}${data}`];
     if (d.fonte) out.push(`  ${escaparMD(d.fonte)}`);
     return out;
   };

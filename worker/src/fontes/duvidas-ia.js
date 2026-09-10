@@ -217,6 +217,9 @@ export function validar(bruto, plantel, { hoje = new Date() } = {}) {
       // confunde mais do que ajuda.
       nome: jogador.nome,
       nomeNaNoticia: d.nome !== jogador.nome ? d.nome : null,
+      // A posicao vem do PLANTEL, nunca do modelo — e um facto que ja
+      // temos, nao algo para lhe pedirmos que adivinhe.
+      posicao: jogador.posicao ?? null,
       equipa: jogador.equipa ?? '',
       tipo: d.tipo === 'lesao' ? 'lesao' : 'duvida',
       motivo: d.motivo.slice(0, 200),

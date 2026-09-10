@@ -15,7 +15,7 @@
     "teste-castigos": "node testes/teste-castigos.mjs",
     "teste-montar": "node testes/teste-montar.mjs",
     "teste-optimalidade": "node testes/teste-optimalidade.mjs",
-    "teste": "npm run verificar && npm run teste-castigos && npm run teste-ia && npm run teste-fallback && npm run teste-montar && npm run teste-optimalidade",
+    "teste": "npm run verificar && npm run teste-castigos && npm run teste-ia && npm run teste-fallback && npm run teste-jogos && npm run teste-montar && npm run teste-optimalidade",
     "inspect": "node src/inspect.js",
     "inspect-jornada": "node src/inspect-jornada.js",
     "inspect-zerozero": "node src/inspect-zerozero.js",
@@ -26,7 +26,8 @@
     "inspect-lp": "node src/inspect-ligaportugal.js",
     "inspect-lp-tabela": "node src/inspect-lp-tabela.js",
     "teste-ia": "node testes/teste-ia.mjs",
-    "teste-fallback": "node testes/teste-fallback-telegram.mjs"
+    "teste-fallback": "node testes/teste-fallback-telegram.mjs",
+    "teste-jogos": "node testes/teste-jogos.mjs"
   },
   "dependencies": {
     "cheerio": "^1.0.0",

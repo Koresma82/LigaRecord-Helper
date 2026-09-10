@@ -31,8 +31,14 @@ import { emparelhar } from './emparelhar.js';
 import { normalizar, equipaCanonica } from './normalizar.js';
 import { criarIndice, procurar } from './emparelhar-jogador.js';
 import { sugerirSubstituicoes } from './sugerir.js';
-import { guardarBoletim, lerBoletim } from './firestore.js';
+import {
+  guardarBoletim,
+  lerBoletim,
+  guardarJogosDaJornada,
+  lerJogosDaJornada,
+} from './firestore.js';
 import { montarPlantel } from './partilhado/montar-plantel.js';
+import { unirJogos } from './jogos-fallback.js';
 
 // Menos ausencias do que isto em toda a liga significa quase de certeza
 // que o scraping partiu, nao que a liga esta saudavel.
@@ -732,16 +738,103 @@ export async function recolher({ log = console.log, anterior = null, duvidasIA =
     ),
   ]);
 
-  const proximosJogos = { dados: listaJogos };
+  // NAO simplesmente "jogosActual ? listaJogos : jogosUsar" — isso perdia
+  // os jogos de OUTRAS jornadas que a mesma recolha tenha trazido bem. Se so
+  // a jornada 6 faltou mas a 7 veio junto no mesmo pedido, o fallback da 6
+  // nao pode apagar a 7 que ja tinhamos.
+  const outrasJornadas = listaJogos.filter((x) => Number(x.jornada) !== porJogar);
+  const proximosJogos = { dados: unirJogos(outrasJornadas, jogosUsar) };
 
   // Estatisticas por jogador. Emparelhamento DIFUSO, nao por igualdade: o
   // zerozero escreve "Vangelis Pavlidis" e a Liga Record "Pavlidis".
   const indiceGolos = criarIndice(golos);
 
+  // GUARDA: uma jornada da Primeira Liga tem 9 jogos. Menos de metade disso
+  // e implausivel — o mesmo sintoma que ja vimos na disciplina e nas lesoes:
+  // uma fonte que muda de forma ou falha a meio devolve uma lista vazia OU
+  // quase vazia em vez de um erro, e "zero jogos" era lido como "toda a
+  // gente esta de folga esta jornada" — o OPOSTO do que aconteceu.
+  //
+  // Sem isto, um jogador com jogo marcado aparecia em "sem jogo esta
+  // jornada, tira-o do onze" — um conselho ACTIVAMENTE errado, nao so uma
+  // lacuna. Foi o que aconteceu: FC Porto - Casa Pia estava marcado e os 23
+  // jogadores do plantel apareceram todos como "sem jogo".
+  const JOGOS_MINIMOS_PLAUSIVEIS = 4;
+  const jogosDaJornada = listaJogos.filter((x) => Number(x.jornada) === porJogar);
+
+  let jogosUsar = jogosDaJornada;
+  let jogosActual = true;
+  let jogosRecolhidosEm = new Date().toISOString();
+
+  if (porJogar && jogosDaJornada.length >= JOGOS_MINIMOS_PLAUSIVEIS) {
+    // Jogos bons: guarda-os na base de dados, para uma recolha futura os
+    // poder ir buscar mesmo que o boletim anterior ja nao os tenha. Nunca
+    // fatal — se o Firestore falhar aqui, a recolha continua na mesma, so
+    // sem esta rede extra.
+    try {
+      await guardarJogosDaJornada(porJogar, jogosDaJornada);
+    } catch (erro) {
+      log(`  Aviso: nao consegui guardar os jogos da jornada ${porJogar}: ${erro.message.split('\n')[0]}`);
+    }
+  }
+
+  if (porJogar && jogosDaJornada.length < JOGOS_MINIMOS_PLAUSIVEIS) {
+    avisos.push(
+      `Só encontrei ${jogosDaJornada.length} jogo(s) para a jornada ${porJogar} — pouco para uma ronda completa.`
+    );
+
+    // Tres niveis de fallback, do mais barato ao mais fiavel.
+    //
+    // 1. O boletim anterior, SO se era sobre a mesma jornada — jogos da
+    //    jornada 5 nao servem de substituto para a 6.
+    const mesmaJornada = anterior?.jornada?.numero === jornada.numero;
+    const jogosAnteriores = mesmaJornada ? (anterior?.proximosJogos?.dados ?? []) : [];
+    const anterioresDaJornada = jogosAnteriores.filter((x) => Number(x.jornada) === porJogar);
+
+    if (anterioresDaJornada.length >= JOGOS_MINIMOS_PLAUSIVEIS) {
+      jogosUsar = anterioresDaJornada;
+      jogosActual = false;
+      jogosRecolhidosEm = anterior?.jogosRecolhidosEm ?? jogosRecolhidosEm;
+      avisos.push('A usar os jogos da recolha anterior — os adversários podem estar desactualizados.');
+    } else {
+      // 2. A base de dados. Diferente do boletim anterior: sobrevive a
+      //    varias recolhas falhadas seguidas, porque so se reescreve
+      //    quando ha jogos bons — nunca com um "vazio" por cima do que ja
+      //    tinha. Se a jornada 6 faltar tres recolhas seguidas, esta e a
+      //    unica das tres fontes que ainda a tem.
+      let daBaseDeDados = null;
+      try {
+        daBaseDeDados = await lerJogosDaJornada(porJogar);
+      } catch (erro) {
+        log(`  Aviso: nao consegui ler os jogos da jornada ${porJogar} da base de dados: ${erro.message.split('\n')[0]}`);
+      }
+
+      if (daBaseDeDados?.dados?.length >= JOGOS_MINIMOS_PLAUSIVEIS) {
+        jogosUsar = daBaseDeDados.dados;
+        jogosActual = false;
+        jogosRecolhidosEm = daBaseDeDados.recolhidoEm ?? jogosRecolhidosEm;
+        avisos.push(
+          `A usar os jogos guardados em ${new Date(daBaseDeDados.recolhidoEm).toLocaleDateString('pt-PT')} — os adversários podem estar desactualizados.`
+        );
+      } else {
+        // 3. Nem a base de dados tinha. Nao inventamos: fica sem jogos
+        //    nenhuns, e o boletim leva um sinalizador para a analise NAO
+        //    concluir "sem jogo" a partir de um buraco de dados.
+        jogosUsar = [];
+        jogosActual = false;
+        avisos.push(
+          'Não consegui confirmar os jogos desta jornada. Os blocos de jogos fáceis/difíceis e "sem jogo" não vão sair na mensagem — confirma o calendário à mão.'
+        );
+      }
+    }
+  }
+
+  const jogosIndisponiveis = jogosUsar.length === 0;
+
   const adversarios = new Map();
   // O proximo adversario e o da jornada POR JOGAR — que e `porJogar`, nao
   // `porJogar + 1`.
-  for (const j of listaJogos.filter((x) => Number(x.jornada) === porJogar)) {
+  for (const j of jogosUsar) {
     const base = { data: j.data, hora: j.hora, jornada: j.jornada };
     adversarios.set(equipaCanonica(j.casa), { ...base, adversario: j.fora, casa: true });
     adversarios.set(equipaCanonica(j.fora), { ...base, adversario: j.casa, casa: false });
@@ -779,6 +872,13 @@ export async function recolher({ log = console.log, anterior = null, duvidasIA =
 
     jornada: { ...jornada, fechoMercado: ronda.fechoMercado },
     ronda,
+    // Quando os jogos vieram frescos desta recolha, ou foram reaproveitados
+    // de uma anterior — o mesmo padrao que ja existia para o mercado.
+    jogosActual,
+    jogosRecolhidosEm,
+    // Sem jogos nenhuns para trabalhar: diz a analise para nao concluir
+    // "ninguem tem jogo" a partir de um buraco de dados.
+    jogosIndisponiveis,
     avisos,
     equipa: {
       saldo: minhaEquipa.saldo,

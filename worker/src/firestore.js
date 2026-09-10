@@ -76,3 +76,43 @@ export async function lerPerfil() {
 export async function guardarPerfil(dados) {
   await bd().collection('utilizadores').doc(chave()).set(dados, { merge: true });
 }
+
+// -----------------------------------------------------------------------------
+// Cache dos jogos, por jornada, independente do boletim.
+//
+// Ate agora, se os jogos de uma jornada faltassem numa recolha, so havia um
+// sitio para os ir buscar: o BOLETIM anterior. Isso tem um problema: o
+// boletim e uma fotografia de UMA recolha, e cada recolha nova reescreve-a.
+// Se a jornada 6 faltar duas recolhas seguidas, a segunda ja nao tem onde
+// a encontrar — o boletim "anterior" que ela ve ja e o da recolha em que
+// tambem faltou.
+//
+// Esta coleccao e diferente: cada jornada guarda-se sozinha, e SO se
+// reescreve quando chegam jogos plausiveis a serio. Uma recolha que falhe
+// nunca apaga o que uma recolha anterior conseguiu — o merge por campo
+// (`porJornada.6`) garante isso.
+// -----------------------------------------------------------------------------
+
+export async function guardarJogosDaJornada(jornada, dados) {
+  if (!jornada || !dados?.length) return;
+  // Objecto aninhado, nao uma chave com ponto — o merge:true do Admin SDK
+  // funde mapas aninhados a serio quando a forma e esta. Uma chave
+  // "porJornada.6" no nivel de topo ficaria gravada literalmente com o
+  // ponto no nome, e a leitura (que espera `porJornada['6']` aninhado)
+  // nunca a encontraria.
+  await bd()
+    .collection('jogosPorJornada')
+    .doc(chave())
+    .set(
+      { porJornada: { [String(jornada)]: { dados, recolhidoEm: new Date().toISOString() } } },
+      { merge: true }
+    );
+}
+
+export async function lerJogosDaJornada(jornada) {
+  if (!jornada) return null;
+  const doc = await bd().collection('jogosPorJornada').doc(chave()).get();
+  if (!doc.exists) return null;
+  const entrada = doc.data()?.porJornada?.[String(jornada)];
+  return entrada?.dados?.length ? entrada : null;
+}
