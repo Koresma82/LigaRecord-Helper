@@ -81,9 +81,19 @@ Escreve no mesmo Firestore que o Railway lê. Os valores da Liga Record mudam
 | Quinta 08:00 | Análise, já com o mapa de castigos. |
 | **Sexta 08:00** | **A última antes do fecho**, e a única com a análise de notícias por IA. |
 
-A chamada paga à IA corre **só à sexta**. Correr três vezes por semana
-triplicava o custo para acrescentar pouco: as notícias de quarta ainda são as
-de terça.
+**A verificação por IA corre nas três mensagens de análise.** Pesquisa
+notícias recentes sobre os teus 23 jogadores e diz-te se algum está
+lesionado ou em dúvida — separando o que é lesão noticiada do que é só
+sinal de risco. Recebe a lista de quem a app já sabe que está fora, para
+não repetir.
+
+Isto não é decoração: a tabela de lesionados do Transfermarkt falha jogador
+a jogador, e a IA é a única rede por baixo dela. São cerca de três chamadas
+pagas por semana. `IA_SO_SEXTA=1` volta a uma só.
+
+Nada do que vem da IA entra nas substituições sugeridas nem na contagem de
+quem está de fora. Só tens uma troca por ronda — não se gasta com base num
+palpite de modelo. O que a mensagem faz é dizer-te onde ir confirmar.
 
 **Uma nota estratégica que não é sobre código.** Só tens uma troca por ronda,
 e as notícias de última hora saem nas conferências de sexta e sábado. Editares

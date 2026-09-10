@@ -25,6 +25,7 @@ const ESPERADO = {
   '../src/fontes/transfermarkt.js': ['lesoesDaLiga', 'lerTabelaLesoes'],
   '../src/tarefas.js': ['enviarResumoSemanal'],
   '../src/fontes/duvidas-ia.js': ['duvidasDaJornada'],
+  '../src/emparelhar-jogador.js': ['criarIndice', 'procurar'],
   '../src/fontes/maisfutebol.js': ['disciplinaDaLiga', 'lerTabelaDisciplina'],
   '../src/fontes/disciplina.js': ['castigosPorAcumulacao', 'chaveDisciplina'],
   '../src/castigos-activos.js': ['actualizarCastigosActivos'],

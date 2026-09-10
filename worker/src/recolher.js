@@ -41,21 +41,25 @@ const MINIMO_PLAUSIVEL = 8;
 // A consulta a IA custa dinheiro e as noticias de uma jornada nao mudam de
 // hora a hora. Uma vez por jornada chega; nos outros dias reaproveita-se o
 // resultado que ja esta no boletim.
-async function duvidasSeNecessario(plantel, jornada, anterior, { log = () => {}, forcar = false } = {}) {
+// A verificacao por IA corre nas mensagens de analise (quarta, quinta e
+// sexta), nao em todas as recolhas. As recolhas diarias silenciosas
+// reaproveitam o ultimo resultado guardado — nao vale a pena pagar uma
+// consulta para nao mandar mensagem nenhuma.
+//
+// `jaConhecidos` e o que faz a consulta valer a pena: o modelo recebe quem a
+// app ja marcou como fora e e instruido a nao repetir. Assim a resposta e
+// so sobre o que as tabelas NAO apanharam, que e o ponto todo desta fonte.
+async function duvidasSeNecessario(plantel, jornada, anterior, { log = () => {}, forcar = false, jaConhecidos = [] } = {}) {
   const guardadas = anterior?.duvidasIA ?? null;
 
-  // A consulta so acontece na mensagem de sexta, que e quando serve para
-  // alguma coisa — e o momento em que vais mesmo mexer na equipa. Nos
-  // outros dias reaproveita-se o que ja esta guardado, para a conta da API
-  // ser exactamente uma chamada por semana.
   if (!forcar) return guardadas;
 
   try {
-    return (await duvidasDaJornada(plantel, jornada, { log })) ?? guardadas;
+    return (await duvidasDaJornada(plantel, jornada, { log, jaConhecidos })) ?? guardadas;
   } catch (erro) {
     // Isto e um extra. Se falhar, a recolha continua — nunca vale a pena
     // perder as lesoes por causa de uma consulta opcional.
-    log(`  Duvidas IA: falhou — ${erro.message.split('\n')[0]}`);
+    log(`  Verificacao IA: falhou — ${erro.message.split('\n')[0]}`);
     return guardadas;
   }
 }
@@ -330,7 +334,7 @@ export async function recolherLeve({ log = console.log, duvidasIA: forcarDuvidas
       minhaEquipa.jogadores,
       anterior.jornada?.numero ?? null,
       anterior,
-      { log, forcar: forcarDuvidas }
+      { log, forcar: forcarDuvidas, jaConhecidos: emRisco }
     ),
   };
 
@@ -339,7 +343,7 @@ export async function recolherLeve({ log = console.log, duvidasIA: forcarDuvidas
   return boletim;
 }
 
-export async function recolher({ log = console.log, anterior = null } = {}) {
+export async function recolher({ log = console.log, anterior = null, duvidasIA = false } = {}) {
   const avisos = [];
 
   // ---------------------------------------------------------------------
@@ -819,7 +823,11 @@ export async function recolher({ log = console.log, anterior = null } = {}) {
     castigosActivos,
     // Campo proprio, deliberadamente fora de emRisco: isto e interpretacao
     // de noticias, nao um facto lido de uma tabela.
-    duvidasIA: await duvidasSeNecessario(minhaEquipa.jogadores, jornada.numero, anterior, { log }),
+    duvidasIA: await duvidasSeNecessario(minhaEquipa.jogadores, jornada.numero, anterior, {
+      log,
+      forcar: duvidasIA,
+      jaConhecidos: emRisco,
+    }),
     classificacao: tabela.map((e) => ({ ...e, equipaCanonica: equipaCanonica(e.equipa) })),
     // Cada jogo leva o nome canonico das duas equipas.
     //

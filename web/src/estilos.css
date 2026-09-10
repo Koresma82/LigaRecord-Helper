@@ -846,3 +846,27 @@ html, body {
   border-left-color: var(--def);
   font-size: 12px;
 }
+
+/* Subsecções do bloco de notícias: lesões fora da tabela vs dúvidas.
+   A distinção é a razão de ser do bloco, por isso tem de se ver. */
+.duvidas-ia__subtitulo {
+  margin: 1.1rem 0 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--texto-fraco, #8b97a8);
+}
+
+.duvidas-ia__subtitulo:first-of-type {
+  margin-top: 0.75rem;
+}
+
+/* O nome pelo qual as notícias tratam o jogador, quando difere do do
+   plantel. Sem isto ficava a dúvida de ser a mesma pessoa. */
+.duvida__alias {
+  margin: 0.2rem 0 0;
+  font-size: 0.76rem;
+  font-style: italic;
+  color: var(--texto-fraco, #8b97a8);
+}

@@ -51,7 +51,10 @@ if (bot) {
   bot.command('semana', async (ctx) => {
     await ctx.reply('A recolher…');
     try {
-      const b = await recolherLeve({ log: () => {} });
+      // Pedido a mao e para mandar mensagem, por isso leva a verificacao
+      // nas noticias — que e a unica coisa que apanha o que a tabela de
+      // lesionados deixa cair.
+      const b = await recolherLeve({ log: () => {}, duvidasIA: true });
       await ctx.reply(resumoSemanal(b), { parse_mode: 'Markdown' });
     } catch (erro) {
       await ctx.reply(`Falhou: ${erro.message.split('\n')[0]}`);
@@ -127,7 +130,7 @@ if (bot) {
   bot.command('actualizar', async (ctx) => {
     await ctx.reply('A fazer a recolha completa. Demora um minuto ou dois…');
     try {
-      const b = await recolher({ log: () => {} });
+      const b = await recolher({ log: () => {}, duvidasIA: true });
       await ctx.reply(resumoSemanal(b), { parse_mode: 'Markdown' });
     } catch (e) {
       await ctx.reply(`Falhou: ${e.message.split('\n')[0]}`);

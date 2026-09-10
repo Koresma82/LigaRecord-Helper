@@ -76,10 +76,27 @@ async function diaria() {
 // A rotina vive em tarefas.js para o `npm run sexta` correr o mesmo codigo.
 // Aqui so se actualiza o estado que a pagina /saude mostra.
 //
-// `comIA` so a sexta: a chamada as noticias e a unica parte paga, e corre-la
-// tres vezes por semana triplicava o custo para acrescentar pouco.
-async function analiseDoDia({ comIA = false } = {}) {
-  const r = await enviarResumoSemanal({ log: () => {}, comIA });
+// `comIA` liga a verificacao do plantel nas noticias.
+//
+// PORQUE E QUE PASSOU A CORRER NAS TRES MENSAGENS
+//
+// Antes so corria a sexta, por custo. A premissa era que as tabelas cobriam
+// as lesoes e a IA so acrescentava duvidas. Essa premissa caiu: o
+// Transfermarkt falhou lesoes confirmadas pelos clubes (Zaidu, Liziero) e
+// nao ha nada no worker que detecte isso — um buraco parcial numa tabela
+// parece exactamente igual a boa noticia.
+//
+// A IA deixou de ser um extra e passou a ser a unica rede de seguranca por
+// baixo da tabela de lesionados. Uma rede que so e lancada a sexta nao serve
+// para quem decide a quarta.
+//
+// Custo: passa de uma para tres chamadas por semana. Poe IA_SO_SEXTA=1 no
+// ambiente para voltar ao comportamento anterior.
+const SO_SEXTA = process.env.IA_SO_SEXTA === '1';
+
+async function analiseDoDia({ comIA = false, sexta = false } = {}) {
+  const usarIA = SO_SEXTA ? sexta : comIA;
+  const r = await enviarResumoSemanal({ log: () => {}, comIA: usarIA });
   if (r.ok) {
     ultimaRecolha = new Date().toISOString();
     ultimoErro = null;
@@ -95,13 +112,13 @@ cron.schedule('0 7 * * *', diaria, { timezone: FUSO });
 // Quarta: recolha completa (valores novos), e a analise 30 minutos depois,
 // para a mensagem ja levar os dados frescos.
 cron.schedule('0 8 * * 3', completa, { timezone: FUSO });
-cron.schedule('30 8 * * 3', () => analiseDoDia(), { timezone: FUSO });
+cron.schedule('30 8 * * 3', () => analiseDoDia({ comIA: true }), { timezone: FUSO });
 
 // Quinta: ja saiu o mapa de castigos.
-cron.schedule('0 8 * * 4', () => analiseDoDia(), { timezone: FUSO });
+cron.schedule('0 8 * * 4', () => analiseDoDia({ comIA: true }), { timezone: FUSO });
 
-// Sexta: a ultima antes do fecho, e a unica com a analise das noticias.
-cron.schedule('0 8 * * 5', () => analiseDoDia({ comIA: true }), { timezone: FUSO });
+// Sexta: a ultima antes do fecho.
+cron.schedule('0 8 * * 5', () => analiseDoDia({ comIA: true, sexta: true }), { timezone: FUSO });
 
 // O Railway mata servicos sem porta a escutar. Isto tambem serve de
 // pagina de saude para saberes se o worker esta vivo.

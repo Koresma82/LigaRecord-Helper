@@ -67,6 +67,10 @@ export function resumoJornada(boletim) {
     }
   }
 
+  // O que as noticias apanharam e as tabelas nao. Tambem aqui, para o
+  // /boletim dar a mesma informacao que a mensagem automatica.
+  linhas.push(...blocoIA(boletim));
+
   const meus = new Set((boletim.equipa?.plantel ?? []).map((j) => j.nome));
 
   // Castigos que nao dao para confirmar. So aparecem se forem TEUS —
@@ -162,6 +166,59 @@ export function resumoPlantel(r) {
 // pergunta, e so depois dá o contexto da liga.
 // -----------------------------------------------------------------------------
 
+// -----------------------------------------------------------------------------
+// O que as noticias dizem e as tabelas nao.
+//
+// Separado em dois porque sao coisas diferentes e merecem peso diferente:
+//
+//   LESAO   noticia concreta de indisponibilidade que a tabela do
+//           Transfermarkt nao apanhou. Isto e quase um facto e tem de te
+//           saltar a vista — foi o caso do Zaidu, com lesao confirmada pelo
+//           clube e ausente da tabela.
+//
+//   DUVIDA  sinal de risco sem confirmacao. Contexto, nao decisao.
+//
+// Nem um nem outro se somam a contagem dos que estao de fora, e nenhum entra
+// nas substituicoes sugeridas. A troca da ronda e uma so; nao se gasta com
+// base num palpite de modelo. O que isto faz e dizer-te onde ir confirmar.
+// -----------------------------------------------------------------------------
+function blocoIA(boletim) {
+  const ia = boletim.duvidasIA;
+  const achados = ia?.achados ?? ia?.duvidas ?? [];
+  if (!achados.length) return [];
+
+  const linhas = [];
+  const lesoes = achados.filter((d) => d.tipo === 'lesao');
+  const duvidas = achados.filter((d) => d.tipo !== 'lesao');
+
+  const linha = (d) => {
+    const confianca = d.confianca === 'alta' ? '' : ` _(confiança ${d.confianca})_`;
+    // O nome das noticias so aparece quando difere do do plantel: e o que
+    // te permite procurar a noticia sem ficares a pensar se e a mesma pessoa.
+    const alias = d.nomeNaNoticia ? ` _(nas notícias: ${d.nomeNaNoticia})_` : '';
+    const out = [`• *${d.nome}*${alias} — ${d.motivo}${confianca}`];
+    if (d.fonte) out.push(`  ${d.fonte}`);
+    return out;
+  };
+
+  if (lesoes.length) {
+    linhas.push(
+      '',
+      `🔴 *Nas notícias, mas fora da tabela de lesionados (${lesoes.length})*`
+    );
+    for (const d of lesoes) linhas.push(...linha(d));
+    linhas.push('_A tabela do Transfermarkt não os tem. Confirma antes de decidir._');
+  }
+
+  if (duvidas.length) {
+    linhas.push('', `📰 *Em dúvida nas notícias (${duvidas.length})*`);
+    for (const d of duvidas) linhas.push(...linha(d));
+    linhas.push('_Sinais de risco, não confirmações._');
+  }
+
+  return linhas;
+}
+
 export function resumoSemanal(boletim) {
   const jornada = boletim.jornada?.numero;
   const plantel = boletim.equipa?.plantel ?? [];
@@ -195,6 +252,13 @@ export function resumoSemanal(boletim) {
     linhas.push('', '✅ *Nenhum dos teus jogadores está de fora.*');
   }
 
+  // 1b. O que as noticias apanharam e as tabelas nao. Fica AQUI, logo a
+  //     seguir a decisao, e nao no fim: uma lesao confirmada pelo clube que
+  //     o Transfermarkt nao lista muda o que vais fazer, e um "nenhum dos
+  //     teus jogadores esta de fora" seguido de silencio e enganador quando
+  //     as noticias dizem o contrario.
+  linhas.push(...blocoIA(boletim));
+
   // 2. A troca sugerida, se houver alguem para trocar.
   const troca = boletim.sugestoes?.melhorTroca;
   if (meusFora.length && troca) {
@@ -225,19 +289,6 @@ export function resumoSemanal(boletim) {
   const naLiga = boletim.ligaInteira ?? [];
   const lesionados = naLiga.filter((j) => j.ausencia?.tipo === 'lesao').length;
   const castigados = naLiga.filter((j) => j.ausencia?.tipo === 'castigo').length;
-
-  // Duvidas recolhidas por IA das noticias da semana. Ficam DEPOIS de tudo
-  // o que e facto, com a origem a vista: sao para confirmares, nao para
-  // agires directamente. Nunca se somam a contagem dos que estao de fora.
-  const ia = boletim.duvidasIA;
-  if (ia?.duvidas?.length) {
-    linhas.push('', `📰 *Nas notícias desta semana* (não confirmado)`);
-    for (const d of ia.duvidas) {
-      const confianca = d.confianca === 'alta' ? '' : ` _(confiança ${d.confianca})_`;
-      linhas.push(`• *${d.nome}* — ${d.motivo}${confianca}`);
-      if (d.fonte) linhas.push(`  ${d.fonte}`);
-    }
-  }
 
   // 4. A analise da jornada: adversarios, quem nao tem jogo, quem esta a um
   //    amarelo. Fica antes do lembrete final porque e o que te faz mexer no
