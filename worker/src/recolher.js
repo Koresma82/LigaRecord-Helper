@@ -59,8 +59,11 @@ async function duvidasSeNecessario(plantel, jornada, anterior, { log = () => {},
   } catch (erro) {
     // Isto e um extra. Se falhar, a recolha continua — nunca vale a pena
     // perder as lesoes por causa de uma consulta opcional.
-    log(`  Verificacao IA: falhou — ${erro.message.split('\n')[0]}`);
-    return guardadas;
+    const razao = erro.message.split('\n')[0];
+    log(`  Verificacao IA: falhou — ${razao}`);
+    // Guardamos a falha em vez de a esconder. A mensagem passa a dizer que a
+    // verificacao nao correu, e nao a fingir que correu e nao achou nada.
+    return { ...(guardadas ?? {}), jornada, estado: 'falhou', razao };
   }
 }
 

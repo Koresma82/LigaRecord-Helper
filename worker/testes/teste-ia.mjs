@@ -88,16 +88,56 @@ const plantel = [
   );
 }
 
-// --- 3. Sem achados nao ha bloco nenhum -------------------------------------
+// --- 3. Verificou e nao achou nada: TEM de o dizer --------------------------
 {
   const texto = resumoSemanal({
     jornada: { numero: 6 },
     equipa: { plantel },
     emRisco: [],
     ligaInteira: [],
-    duvidasIA: { jornada: 6, achados: [] },
+    duvidasIA: { jornada: 6, estado: 'ok', achados: [] },
   });
-  ok(!texto.includes('notícias'), 'sem achados, nenhum bloco de notícias é escrito');
+  ok(
+    texto.includes('Notícias verificadas'),
+    'sem achados, a mensagem diz que verificou — silêncio não é prova'
+  );
+}
+
+// --- 3b. Desligada ou falhada: a mensagem avisa, nao finge que correu -------
+{
+  const desligada = resumoSemanal({
+    jornada: { numero: 6 },
+    equipa: { plantel },
+    emRisco: [],
+    ligaInteira: [],
+    duvidasIA: { jornada: 6, estado: 'desligado', razao: 'ANTHROPIC_API_KEY não está definida', achados: [] },
+  });
+  ok(desligada.includes('está desligada'), 'IA desligada é avisada na mensagem');
+  ok(desligada.includes('ANTHROPIC_API_KEY'), 'e diz a razão concreta');
+
+  const falhou = resumoSemanal({
+    jornada: { numero: 6 },
+    equipa: { plantel },
+    emRisco: [],
+    ligaInteira: [],
+    duvidasIA: { jornada: 6, estado: 'falhou', razao: 'API devolveu 429', achados: [] },
+  });
+  ok(falhou.includes('falhou'), 'falha da IA é avisada na mensagem');
+}
+
+// --- 3c. O link tem de apontar para o host certo ----------------------------
+{
+  const texto = resumoSemanal({
+    jornada: { numero: 6 },
+    equipa: { plantel },
+    emRisco: [],
+    ligaInteira: [],
+  });
+  ok(
+    !texto.includes('www.record.pt/liga-record'),
+    'o link partido www.record.pt/liga-record desapareceu'
+  );
+  ok(texto.includes('liga.record.pt'), 'e aponta para liga.record.pt');
 }
 
 // --- 4. Boletim no formato antigo continua a ler-se -------------------------

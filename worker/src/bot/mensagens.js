@@ -10,6 +10,15 @@ const ROTULO = {
 
 // O Telegram corta mensagens acima de 4096 caracteres, por isso
 // mantemos isto curto de proposito. O detalhe esta na app.
+const BASE_LR = process.env.LR_BASE ?? 'https://liga.record.pt';
+
+function ligacaoLigaRecord() {
+  const equipa = process.env.LR_ID_TEAM;
+  return equipa
+    ? `${BASE_LR}/gerir-equipas/plantel.aspx?id_team=${equipa}`
+    : BASE_LR;
+}
+
 export function resumoJornada(boletim) {
   // Quinta de manha: e este que te chega, com tudo o que precisas para ires
   // editar no site.
@@ -184,8 +193,32 @@ export function resumoPlantel(r) {
 // -----------------------------------------------------------------------------
 function blocoIA(boletim) {
   const ia = boletim.duvidasIA;
-  const achados = ia?.achados ?? ia?.duvidas ?? [];
-  if (!achados.length) return [];
+  if (!ia) return [];
+
+  const achados = ia.achados ?? ia.duvidas ?? [];
+
+  // Estado antes de conteudo. Uma mensagem sem bloco nenhum era
+  // indistinguivel de "verifiquei e esta tudo bem" — e as duas coisas
+  // levam-te a decisoes opostas.
+  if (ia.estado && ia.estado !== 'ok') {
+    const explicacao = {
+      desligado: 'a verificação nas notícias está desligada',
+      'sem-plantel': 'não há plantel registado para verificar',
+      falhou: 'a verificação nas notícias falhou',
+    };
+    const razao = ia.razao ? ` (${ia.razao})` : '';
+    return [
+      '',
+      `⚠️ _${explicacao[ia.estado] ?? 'verificação nas notícias indisponível'}${razao}._`,
+      '_A tabela de lesionados sozinha deixa jogadores de fora. Confirma à mão._',
+    ];
+  }
+
+  // Verificou e nao achou nada. Vale a pena dize-lo: silencio nao e prova
+  // de que se procurou.
+  if (!achados.length) {
+    return ['', '📰 _Notícias verificadas: nada de novo sobre os teus jogadores._'];
+  }
 
   const linhas = [];
   const lesoes = achados.filter((d) => d.tipo === 'lesao');
@@ -321,7 +354,10 @@ export function resumoSemanal(boletim) {
   // quando ha problemas, uma semana calma passava despercebida e o fecho
   // apanhava-te distraido.
   linhas.push('', '👉 Vai à Liga Record confirmar a equipa antes do fecho.');
-  linhas.push('https://www.record.pt/liga-record');
+  // O www.record.pt/liga-record nao existe — o jogo vive noutro host. Usamos
+  // o mesmo BASE que o worker usa para ler os dados, e quando ha id de
+  // equipa vai direito a pagina onde mexes mesmo no plantel.
+  linhas.push(ligacaoLigaRecord());
 
   return linhas.join('\n');
 }

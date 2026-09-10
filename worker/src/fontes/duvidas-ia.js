@@ -148,16 +148,21 @@ function validar(bruto, plantel) {
  *                             para o modelo nao gastar a resposta a repeti-los
  */
 export async function duvidasDaJornada(plantel, jornada, { log = () => {}, jaConhecidos = [] } = {}) {
+  // DEVOLVE SEMPRE UM ESTADO, nunca null.
+  //
+  // Devolver null fazia a mensagem omitir o bloco por completo — e uma
+  // omissao e indistinguivel de "verifiquei e nao encontrei nada". Ficavas
+  // a olhar para uma mensagem sem avisos sem saber se era boa noticia ou se
+  // a chave da API nem estava configurada. E a mesma falha silenciosa que
+  // este projecto todo existe para evitar.
   const chave = process.env.ANTHROPIC_API_KEY;
   if (!chave) {
     log('  Verificacao IA: desligada (sem ANTHROPIC_API_KEY)');
-    return null;
+    return { jornada, estado: 'desligado', razao: 'ANTHROPIC_API_KEY não está definida', achados: [], duvidas: [] };
   }
-  // Sair calado aqui deixava a impressao de que a consulta nem existia.
-  // Sem plantel nao ha nada para perguntar, mas convem dize-lo.
   if (!plantel?.length) {
     log('  Verificacao IA: sem plantel registado, nao ha o que perguntar');
-    return null;
+    return { jornada, estado: 'sem-plantel', razao: 'não há plantel registado', achados: [], duvidas: [] };
   }
 
   const lista = plantel.map((j) => `- ${j.nome} (${j.equipa})`).join('\n');
@@ -250,6 +255,7 @@ export async function duvidasDaJornada(plantel, jornada, { log = () => {}, jaCon
 
   return {
     jornada,
+    estado: 'ok',
     consultadoEm: new Date().toISOString(),
     modelo: MODELO,
     achados,
